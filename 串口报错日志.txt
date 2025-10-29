@@ -1,0 +1,56 @@
+--- Terminal on /dev/ttyACM0 | 115200 8-N-1
+--- Available filters and text transformations: colorize, debug, default, direct, esp32_exception_decoder, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+Guru Meditation Error: Core  1 panic'ed (LoadProhibited). Exception was unhandled.
+
+Core  1 register dump:
+PC      : 0x42024202  PS      : 0x00060830  A0      : 0x82001fe7  A1      : 0x3fcb4f50  
+A2      : 0x3d820fe0  A3      : 0x00000200  A4      : 0x00000000  A5      : 0x00000001  
+A6      : 0x00000100  A7      : 0x00000001  A8      : 0x00000000  A9      : 0x3fcb4f30  
+A10     : 0x00000000  A11     : 0x00000000  A12     : 0x00001000  A13     : 0x3d821fe0  
+A14     : 0x3fcf0300  A15     : 0x00000100  SAR     : 0x00000001  EXCCAUSE: 0x0000001c  
+EXCVADDR: 0x00000000  LBEG    : 0x400570e8  LEND    : 0x400570f3  LCOUNT  : 0x00000000  
+
+
+Backtrace: 0x420241ff:0x3fcb4f50 0x42001fe4:0x3fcb4f60 0x420020f2:0x3fcb4fb0 0x4200413e:0x3fcb4fe0
+
+
+
+
+ELF file SHA256: 3e7a1e4f47db4106
+
+Rebooting...
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x420242ba
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+
+=== Log-Mel MCU Test (Random 1s Audio) ===
+Heap free: 258228 bytes
+PSRAM free: 8386035 bytes
+Guru Meditation Error: Core  1 panic'ed (LoadProhibited). Exception was unhandled.
+
+Core  1 register dump:
+PC      : 0x42024202  PS      : 0x00060830  A0      : 0x82001fe7  A1      : 0x3fcb4f50  
+A2      : 0x3d820fe0  A3      : 0x00000200  A4      : 0x00000000  A5      : 0x00000001  
+A6      : 0x00000100  A7      : 0x00000001  A8      : 0x00000000  A9      : 0x3fcb4f30  
+A10     : 0x00000000  A11     : 0x00000000  A12     : 0x00001000  A13     : 0x3d821fe0  
+A14     : 0x3fcf0300  A15     : 0x00000100  SAR     : 0x00000001  EXCCAUSE: 0x0000001c  
+EXCVADDR: 0x00000000  LBEG    : 0x400570e8  LEND    : 0x400570f3  LCOUNT  : 0x00000000  
+
+
+Backtrace: 0x420241ff:0x3fcb4f50 0x42001fe4:0x3fcb4f60 0x420020f2:0x3fcb4fb0 0x4200413e:0x3fcb4fe0
+
+
+
+
+ELF file SHA256: 3e7a1e4f47db4106
+
+Rebooting...

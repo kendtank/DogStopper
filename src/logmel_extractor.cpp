@@ -1,4 +1,3 @@
-// logmel_extractor_safe.cpp
 #include <Arduino.h>
 #include <stdlib.h>
 #include <string.h>
