@@ -7,20 +7,13 @@
 #include "dsps_fft2r.h"
 #include "logmel_extractor.h"
 
+// FFT初始化标志
+static bool fft_initialized = false;
 
 // -------------------- 工具函数 --------------------
 static void make_hann(float *w){
     for(int n=0;n<NFFT;n++) w[n] = 0.5f - 0.5f * cosf(2.0f*M_PI*n/NFFT);
 }
-
-// static int reflect_pad(const float *y, int L, int pad, float *out){
-//     if(L <= 1 || pad <= 0) { memcpy(out, y, L*sizeof(float)); return L; }
-//     int T = L + 2*pad;
-//     for(int i=0;i<pad;i++) out[i] = y[pad-i];
-//     memcpy(out+pad, y, L*sizeof(float));
-//     for(int i=0;i<pad;i++) out[pad+L+i] = y[L-2-i];
-//     return T;
-// }
 
 static int reflect_pad(const float *y, int L, int pad, float *out) {
     if (L <= 1 || pad <= 0) {
@@ -53,7 +46,6 @@ static double mel_to_hz(double m){
     return f_break*exp(log(logstep)*(m-min_log_mel));
 }
 
-
 // 构建 Mel 滤波器组
 static void build_mel_filters(float *W){
     memset(W,0,sizeof(float)*N_MEL*NFFT_BINS);
@@ -81,13 +73,20 @@ static void build_mel_filters(float *W){
     }
 }
 
-
-// -------------------- TODO: FFT 使用dsps库（专门用于实数 FFT运算加速）--------------------
+// -------------------- FFT 使用dsps库（专门用于实数 FFT运算加速）--------------------
 static void rfft_power(float *x, float *P) {
-    // 使用 aligned_malloc 并检查对齐
+    // 初始化FFT库（只初始化一次）
+    if (!fft_initialized) {
+        esp_err_t ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
+        if (ret != ESP_OK) {
+            Serial.printf("Failed to initialize FFT library. Error = %i\n", ret);
+            return;
+        }
+        fft_initialized = true;
+    }
 
-    // TODO:程序崩溃在这个函数，怀疑是 fft_buf 分配失败导致的， 又或者是需要先dsps_fft2r_fc32 初始化失败， 这个函数需要在 PSRAM 分配， 且在最新的库中未找到
-    float* fft_buf = (float*) heap_caps_aligned_calloc(16, NFFT * 2, sizeof(float), MALLOC_CAP_SPIRAM);
+    // 使用PSRAM分配内存
+    float* fft_buf = (float*) heap_caps_aligned_calloc(16, NFFT * 2, sizeof(float), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     
     if (!fft_buf) {
         Serial.println("rfft_power: heap_caps_aligned_calloc failed!");
@@ -118,13 +117,12 @@ static void rfft_power(float *x, float *P) {
     dsps_cplx2reC_fc32(fft_buf, NFFT);
 
     for(int k = 0; k < NFFT_BINS; k++) {
-        P[k] = fft_buf[k];
+        P[k] = (fft_buf[2*k] * fft_buf[2*k] + fft_buf[2*k + 1] * fft_buf[2*k + 1]) / NFFT;
     }
 
     // free
     heap_caps_free(fft_buf);
 }
-
 
 static void free_all_and_return(float* buf, float* melW, float* mel_buf, float* x, float* win, float* P) {
     heap_caps_free(buf);
@@ -134,8 +132,6 @@ static void free_all_and_return(float* buf, float* melW, float* mel_buf, float* 
     heap_caps_free(win);
     heap_caps_free(P);
 }
-
-
 
 // -------------------- Log-Mel --------------------
 int compute_logmel(const float *audio, int num_samples, float *logmel_out, int max_frames) {

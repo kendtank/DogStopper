@@ -1,51 +1,33 @@
 #include <Arduino.h>
-#include "logmel_extractor.h"
+#include "compute_logmel.h"
 
-#define SEGMENT_SAMPLES 16000   // 1 秒音频
-#define MAX_FRAMES_PER_SEG 160  // 最大帧数
+// 定义输入输出缓冲区
+#define AUDIO_BUFFER_SIZE 16000  // 1秒 @ 16kHz
+#define LOGMEL_FEATURE_SIZE 64
 
-float logmel_out[MAX_FRAMES_PER_SEG * N_MEL];  // 输出数组
-
-float test_audio[SEGMENT_SAMPLES];  // 随机音频
+int16_t audio_buffer[AUDIO_BUFFER_SIZE];
+float logmel_features[LOGMEL_FEATURE_SIZE];
 
 void setup() {
+    // 初始化串口
     Serial.begin(115200);
-    delay(1000);
-    Serial.println("\n=== Log-Mel MCU Test (Random 1s Audio) ===");
+    while (!Serial && millis() < 4000); // 等待串口监视器（仅用于调试）
 
-    // 检查 PSRAM 可用性
-    Serial.printf("Heap free: %d bytes\n", ESP.getFreeHeap());
-    Serial.printf("PSRAM free: %d bytes\n", ESP.getFreePsram());
+    Serial.println("[INFO] DogStopper System Starting...");
 
-    if (ESP.getFreePsram() < 1000000) {
-        Serial.println(" PSRAM not available or too small! Check board settings.");
-        while (1); 
-    }
+    // 示例：用静音数据测试 compute_logmel_200ms
+    memset(audio_buffer, 0, sizeof(audio_buffer));
+    memset(logmel_features, 0, sizeof(logmel_features));
 
-    // 生成测试音频
-    for (int i = 0; i < SEGMENT_SAMPLES; i++) {
-        test_audio[i] = ((float)random(-1000, 1000)) / 1000.0f;
-    }
+    compute_logmel_200ms(audio_buffer, logmel_features);
 
-    // 调用 Log-Mel 提取
-    int frames = compute_logmel(test_audio, SEGMENT_SAMPLES, logmel_out, MAX_FRAMES_PER_SEG);
-    
-    if (frames < 0) {
-        Serial.printf("compute_logmel returned error code: %d\n", frames);
-    } else {
-        Serial.printf("Extracted %d frames from 1s random audio\n", frames);
-
-        // 打印前 3 帧
-        for (int f = 0; f < min(3, frames); f++) {
-            Serial.printf("Frame %d: ", f);
-            for (int m = 0; m < N_MEL; m++) {
-                Serial.printf("%.2f ", logmel_out[f * N_MEL + m]);
-            }
-            Serial.println();
-        }
+    Serial.println("[INFO] Log-Mel computation completed.");
+    for (int i = 0; i < 10; i++) {
+        Serial.printf("Feature[%d] = %.6f\n", i, logmel_features[i]);
     }
 }
 
 void loop() {
-
+    // 主循环
+    delay(5000); // 每5秒运行一次
 }
