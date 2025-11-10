@@ -5,7 +5,7 @@
 /// Mel滤波器数组定义
 /// 数据直接由Python生成的.h文件包含
 /// 放在PSRAM节区，避免占用内部RAM
-/// 验证c和python结果一致性[pass]  1e-5f 误差范围内一致  TODO: 是否需要加static 修饰
+/// 验证c和python结果一致性[pass]  1e-5f 误差范围内一致  TODO: 是否需要加static
 /// ================================
 const float mel_filterbank[MEL_BANDS * NUM_BINS] 
     __attribute__((section(".psram"))) = {
@@ -78,7 +78,7 @@ void apply_log_mel(const float* power_spectrum, float* logmel_out)
         float x = mel_linear[i];
 
         // 避免 log(0)
-        if (x < 1e-8f) x = 1e-8f;
+        if (x < 1e-10f) x = 1e-10f;
 
         // 计算 dB
         float db = 10.0f * log10f(x);

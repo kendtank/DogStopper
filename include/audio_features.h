@@ -58,9 +58,16 @@ extern "C" {
 #endif
 
 
-// -------------------- 状态/结果尺寸 --------------------
+// -------------------- 状态/结果尺寸 测试用--------------------
 #define LOGMEL_SIZE     (NUM_FRAMES * N_MEL_BINS)
 #define MFCC_SIZE       (NUM_FRAMES * N_MFCC)
+
+
+// 初始化和释放中间的buffer函数
+bool init_feature_buffers();
+
+
+void free_feature_buffers();
 
 
 

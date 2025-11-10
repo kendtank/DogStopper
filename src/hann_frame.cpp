@@ -9,7 +9,7 @@ static int hann_initialized = 0;
 
 
 // ================== 汉宁窗初始化 只需要计算一次，后续一直存在静态数据中 ==================
-void hann_init(void){
+static void hann_init(void){
     if(!hann_initialized){
         for(int n=0; n<FRAME_SIZE; n++)
             hann_win[n] = 0.5f - 0.5f * cosf(2.0f * M_PI * n / FRAME_SIZE);
