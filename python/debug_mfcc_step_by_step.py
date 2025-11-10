@@ -9,6 +9,7 @@ import numpy as np
 import librosa
 from scipy.signal.windows import get_window
 from scipy.fftpack import dct
+from scipy.fftpack import fft
 
 # ============================
 # 参数设置
@@ -16,10 +17,10 @@ from scipy.fftpack import dct
 sr = 16000
 n_fft = 400
 hop = 160
-n_mels = 128
+n_mels = 64  # mel滤波器个数
 n_mfcc = 40
 fmin = 0.0
-fmax = None
+fmax = sr/2.0 -1
 
 # ============================
 # Step 1. 读取 test_data.h
@@ -76,41 +77,183 @@ save_to_header(frames_win[:, 0], "frame0_windowed", "out/frame0_windowed.h")
 # 保存为二维数组 h 文件
 # save_to_header(frames_win, "frame_windowed_all", "out/frame_windowed_all.h")
 # 需要转置一下，变成每帧连续存储
-save_to_header(frames_win.T, "frame_windowed_all", "out/frame_windowed_all.h")
+save_to_header(frames_win.T.flatten(), "frame_windowed_all", "out/frame_windowed_all.h")
 
 
 # ============================
-# Step 4. 功率谱
+# Step 4. 功率谱   
+# 注意：当 norm=None（默认）norm == "backward"、 不缩放正向 FFT 输出，只在逆变换时除以 N。
+# 也就是说：np.fft.rfft(x) == Σ x[n] * exp(-2πi kn / N)， 没有任何除以 NFFT 或 sqrt(NFFT) 的缩放。
 # ============================
-powspec = np.abs(np.fft.rfft(frames_win, axis=0))**2   # np.fft.rfft(frames_win, axis=0) → 对每一列（每帧）做 RFFT， 因为numpy是按列优先存储的， abs(...)**2 → 得到功率谱
+print("确认frames_win shape:", frames_win.shape) # 确认frames_win shape: (400, 18) 每一 列 是一帧。
+# Step 1. FFT（正向不缩放） np.fft.rfft() 只返回正频率部分（包含直流 DC 和 Nyquist 分量），而完整能量包括了正频率和负频率两个对称部分。
+# fft = np.fft.rfft(frames_win, axis=0) # np.fft.rfft(frames_win, axis=0) → 对每一列（每帧）做 RFFT， 因为numpy是按列优先存储的， abs(...)**2 → 得到功率谱
+
+
+# 第一帧400个点
+# x = frames_win[:, 0].astype(np.float32)
+# 全帧3200个点
+
+print("确认frames_win shape:", frames_win.shape) # (400, 18)
+print("确认frames_win 格式:", frames_win.dtype)
+x = frames_win.astype(np.float32)
+n_fft = 512
+num_bins = n_fft // 2 + 1
+
+# X = fft(x)  # scipy.fftpack.fft → 对齐 ESP-DSP 的 dsps_fft2r_fc32
+X = fft(x, n=n_fft, axis=0)  # 默认 scipy.fftpack.fft(x) 会把整个二维数组当作 扁平数组 做 FFT（按行展开）。
+# powspec =np.abs(X)**2  # np.abs(X) 就是幅度 |X|
+# 功率谱（对齐 MCU：只取前 N/2+1 个 bin）
+powspec = np.abs(X[:num_bins, :])**2  # Power Spectrum
+
+print(f"powspec shape: {powspec.shape}")
 powspec = powspec.astype(np.float32)
-# save_to_header(powspec[:, 0], "frame0_power", "out/frame0_power.h")
-# 导出为一维平铺数组
-powspec_all = powspec.T.flatten()  # shape = (num_frames*(FRAME_SIZE//2+1),)
-save_to_header(powspec_all, "powspec_all", "out/powspec_all.h")
-# # ============================
-# # Step 5. Mel滤波器
-# # ============================
-# M_py = librosa.filters.mel(sr=sr, n_fft=n_fft, n_mels=n_mels,
-#                            fmin=fmin, fmax=fmax, htk=False, norm="slaney").astype(np.float32)
+
+save_to_header(powspec.T.flatten(), "powspec", "out/powspec.h")
+
+# # 打印600个点数据的功率谱
+# for i in range(16):
+#     print(f"py Bin {i:03d}: {powspec.T.flatten()[i]:+.8f}")
+
+
+
+
+"""
+波形数组读取成功: shape=(3200,), dtype=float32
+  └── 导出 hann_window: shape=(400,), path=out/hann_window.h
+  └── 导出 frame0_windowed: shape=(400,), path=out/frame0_windowed.h
+  └── 导出 frame_windowed_all: shape=(18, 400), path=out/frame_windowed_all.h
+  └── 导出 powspec_all: shape=(3618,), path=out/powspec_all.h
+powspec shape: (201, 18)
+first frame energy sum: 6.750006
+mean total energy: 6.750006
+Energy ratio (spec/input): 0.99999994
+[✓] 全部阶段导出完成！输出目录: ./out
+"""
+
+# librosa 不需要转置
+# # # ============================
+# # # Step 5. Mel滤波器
+# # # ============================
+M_py = librosa.filters.mel(sr=sr, n_fft=512, n_mels=64,
+                           fmin=fmin, fmax=8000, htk=False, norm="slaney").astype(np.float32)
+print(f"Mel滤波器读取成功: shape={M_py.shape}, dtype={M_py.dtype}")
+# 打印前16个滤波器系数
+M_flat = M_py.flatten()
+
+print(f"Mel滤波器读取成功: shape={M_py.shape}, dtype={M_py.dtype}")
+print("前16个值:")
+print(", ".join(f"{v:.6f}" for v in M_flat[:16]))
+
+print("\n后16个值:")
+print(", ".join(f"{v:.6f}" for v in M_flat[-16:]))
+
+
+save_to_header(M_flat, "mel_filterbank", "out/mel_filterbank.h")  # pass
 # save_to_header(M_py, "mel_filterbank", "out/mel_filterbank.h")
 
 # # ============================
 # # Step 6. Mel能量谱
 # # ============================
-# mel_power = np.dot(M_py, powspec).astype(np.float32)
-# save_to_header(mel_power[:, 0], "frame0_mel_power", "out/frame0_mel_power.h")
+mel_power = np.dot(M_py, powspec).astype(np.float32)
+save_to_header(mel_power.T, "frame_mel_power", "out/frame_mel_power.h")
 
 # # ============================
-# # Step 7. Power→dB
+# # Step 7. Power→dB  librosa）默认计算 log10(mel_energy)，然后常常还乘上 10（单位是 dB）
 # # ============================
-# Sdb_py = librosa.power_to_db(mel_power, ref=1.0, amin=1e-10, top_db=None).astype(np.float32)
-# save_to_header(Sdb_py[:, 0], "frame0_mel_db", "out/frame0_mel_db.h")
 
-# # ============================
+# ref=1.0 表示以绝对功率 1 为参考， amin=1e-10，含义：最小功率值阈值，用于防止 log(0) 或下溢
+# 计算完 log-mel 后，如果 dB 值低于 max_dB - top_db，就 clamp
+# Sdb_py = librosa.power_to_db(mel_power, ref=1.0, amin=1e-8, top_db=100).astype(np.float32)
+# Sdb_py = (10.0 * np.log10(mel_power.astype(np.float32) + 1e-10)).astype(np.float32)
+# mel_power: Mel功率谱，float32
+amin = 1e-8      # 最小功率值，避免 log(0)
+top_db = 100.0   # 最大动态范围
+# 计算 dB
+S_db = 10.0 * np.log10(np.maximum(mel_power.astype(np.float32), amin))
+# top_db 限制
+S_db = np.maximum(S_db, S_db.max() - top_db)
+Sdb_py = S_db.astype(np.float32)
+
+save_to_header(Sdb_py.T.flatten(), "frame_mel_db", "out/frame_mel_db.h")
+# ----------------PASS----------------
+
+
+# # # ============================
 # # Step 8. DCT-II -> MFCC
-# # ============================
-# mfcc_py = dct(Sdb_py, axis=0, type=2, norm='ortho')[:n_mfcc, :].astype(np.float32)
-# save_to_header(mfcc_py[:, 0], "frame0_mfcc", "out/frame0_mfcc.h")
+# 离散余弦变换:DCT-II 是一种离散余弦变换，把时域（或频域能量）的序列转换到 余弦基底 空间。它和傅里叶变换类似，但只用 余弦，因此输出是实数，没有复数问题。
+# 数学公式：
+# Xk​=n=0∑N−1​xn​⋅cos[2Nπk(2n+1)​],k=0,1,…,N−1
+
+"""
+# DCT-II 的作用:
+    能量压缩
+        相邻 Mel 滤波器能量高度相关
+        DCT-II 把大部分能量集中到前几个系数（低频系数），舍弃高频系数
+        这就是 MFCC 只取前 12-20 个系数的原因
+    去相关性
+        机器学习模型对强相关输入容易过拟合
+        DCT-II 把 log-Mel 转换到一个近似正交的基底，减少相关性
+    快速计算
+        可以预先生成 DCT 矩阵，直接做矩阵乘法
+        MCU 上节省浮点计算，效率高
+    MFCC 的公式就是：
+        MFCC[k]=n=0∑M−1​log_mel[n]⋅cos[2Mπk(2n+1)​],k=0..N−1
+    𝑀
+        M = Mel 滤波器数（比如 64）
+    𝑁
+        N = 需要保留的 MFCC 系数数（比如 13）
+    注意：前几个系数保留大部分能量，越往后越像高频噪声
+    总结：DCT-II 就是把 log-Mel 向量投影到一组正交余弦基上，把信息压缩到少量系数，同时去掉相关性。
+"""
+
+
+# 计算 MFCC
+# norm='ortho' 对应 librosa.feature.mfcc 默认归一化方式
+# DCT-II：type=2 就是标准 MFCC 的 DCT
+# 归一化：norm='ortho' 对齐 librosa 默认
+
+# 手动实现的 DCT和mfcc特征提取
+
+def get_dct_matrix(MEL_BANDS=64, MFCC_COEFFS=13):
+    dct_matrix = np.zeros((MFCC_COEFFS, MEL_BANDS), dtype=np.float32)
+    for k in range(MFCC_COEFFS):
+        for n in range(MEL_BANDS):
+            dct_matrix[k, n] = np.cos(np.pi * k * (n + 0.5) / MEL_BANDS)
+    # 归一化
+    dct_matrix[0, :] *= np.sqrt(1.0 / MEL_BANDS)
+    dct_matrix[1:, :] *= np.sqrt(2.0 / MEL_BANDS)
+
+    return dct_matrix  # 默认是行优先展平的
+
+
+
+dct_matrix = get_dct_matrix()
+print(f"DCT矩阵读取成功: shape={dct_matrix.shape}, dtype={dct_matrix.dtype}")  # shape=(13, 64), dtype=float32
+print("DCT矩阵[0, 0]值:", dct_matrix[0, 0])  # 应该是 0.125 (sqrt(1/64))
+print("DCT矩阵[1, 0]值:", dct_matrix[1, 0])  # 应该是 cos(π * 1 * (0 + 0.5) / 64) * sqrt(2/64)
+save_to_header(dct_matrix.flatten(), "dct_matrix", "out/dct_matrix.h")  # 保存是否需要转置。 按 行优先（C-order） 展开
+
+
+logmel_in = np.ones(64)
+mfcc_py = np.dot(dct_matrix, logmel_in)
+print("Python MFCC 0:", mfcc_py)  # 应为 [8.0, 0, 0, ...]  # Python MFCC 0: [8. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+
+mfcc_dct = np.dot(dct_matrix, Sdb_py)  # (13, 64) @ (64, T) → (13, T)
+
+# 使用 scipy.fftpack.dct实现DCT
+mfcc_scipy = dct(Sdb_py, axis=0, type=2, norm='ortho')[:13].astype(np.float32)
+
+
+# 比较差距
+print("shape of mfcc_dct:", mfcc_dct.shape)
+print("shape of mfcc_scipy:", mfcc_scipy.shape)
+print("Max abs diff:", np.abs(mfcc_dct - mfcc_scipy).max())
+
+# Max abs diff: 6.1035156e-05
+print("mfcc:", mfcc_scipy)
+
+save_to_header(mfcc_scipy.T, "frame_mfcc", "out/frame_mfcc.h")  # 不知道是不是需要转置
 
 print("\n[✓] 全部阶段导出完成！输出目录: ./out")
