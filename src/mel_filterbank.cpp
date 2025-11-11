@@ -24,22 +24,60 @@ const float mel_filterbank[MEL_BANDS * NUM_BINS]
 /// 输出：
 ///   mel_out — Mel 滤波后能量数组（长度 MEL_BANDS）
 /// ================================
-void apply_mel(const float* power_spectrum, float* mel_out) {
-    // 遍历每一个 mel 滤波器（共 MEL_BANDS 个）
+// void apply_mel(const float* power_spectrum, float* mel_out) {
+//     // 遍历每一个 mel 滤波器（共 MEL_BANDS 个）
+//     for (int i = 0; i < MEL_BANDS; i++) {
+//         float sum = 0.0f;
+//         // 遍历功率谱的每一个频率 bin（共 NUM_BINS 个）
+//         for (int j = 0; j < NUM_BINS; j++) {
+//             // mel_filterbank[i * NUM_BINS + j] 表示第 i 个滤波器在第 j 个频点的权重
+//             // power_spectrum[j] 是该频点的功率值
+//             // 两者相乘并累加，即为第 i 个 mel 滤波器的加权能量
+//             sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
+//         }
+//         // 得到第 i 个 mel 滤波器的总能量
+//         mel_out[i] = sum;
+//         // mel_out[i] = logf(sum + 1e-8f);  // log-mel
+//     }
+// }
+
+
+void apply_log_mel(const float* power_spectrum, float* logmel_out) {
+    const float amin = 1e-8f;     // 防止 log(0)
+    const float top_db = 100.0f;  // 限制动态范围
+    const float log10_const = 0.43429448f; // log10(x) = log(x) * 0.43429
+    float max_db = -INFINITY;
+
+    // 遍历每一个 mel 滤波器
     for (int i = 0; i < MEL_BANDS; i++) {
         float sum = 0.0f;
-        // 遍历功率谱的每一个频率 bin（共 NUM_BINS 个）
+
+        // 计算 mel 滤波加权能量
         for (int j = 0; j < NUM_BINS; j++) {
-            // mel_filterbank[i * NUM_BINS + j] 表示第 i 个滤波器在第 j 个频点的权重
-            // power_spectrum[j] 是该频点的功率值
-            // 两者相乘并累加，即为第 i 个 mel 滤波器的加权能量
             sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
         }
-        // 得到第 i 个 mel 滤波器的总能量
-        mel_out[i] = sum;
-        // mel_out[i] = logf(sum + 1e-8f);  // log-mel
+
+        // 加上安全下限，防止 log(0)
+        if (sum < amin) sum = amin;
+
+        // 转 dB
+        float db = 10.0f * logf(sum) * log10_const;
+        logmel_out[i] = db;
+
+        // 同时更新最大值
+        if (db > max_db) max_db = db;
+    }
+
+    // 应用 top_db 限制和 -80 对齐
+    float min_db = max_db - top_db;
+    for (int i = 0; i < MEL_BANDS; i++) {
+        float db = logmel_out[i];
+        if (db < min_db) db = min_db;
+        if (db < -79.9f) db = -80.0f;
+        logmel_out[i] = db;
     }
 }
+
 
 
 // 注意：apply_mel() 是计算单帧的 Mel 能量谱。它的输入 power 是一帧的功率谱（比如从 25ms 的音频帧 FFT 得到的频谱能量），输出 mel_out 就是这帧对应的 Mel 滤波能量向量。
@@ -62,29 +100,29 @@ void apply_mel(const float* power_spectrum, float* mel_out) {
 //         logmel_out[i] = 10.0f * log10f(x);
 //     }
 // }
-void apply_log_mel(const float* power_spectrum, float* logmel_out)
-{
-    float mel_linear[MEL_BANDS];
-    apply_mel(power_spectrum, mel_linear);  // MCU 端 Mel 滤波
+// void apply_log_mel(const float* power_spectrum, float* logmel_out)
+// {
+//     float mel_linear[MEL_BANDS];
+//     apply_mel(power_spectrum, mel_linear);  // MCU 端 Mel 滤波
 
-    float max_db = -INFINITY;
+//     float max_db = -INFINITY;
 
-    // Step 1: 一次遍历同时做 log10 + 找最大值（减少一半循环）
-    for (int i = 0; i < MEL_BANDS; i++) {
-        float x = fmaxf(mel_linear[i], 1e-8f);     // 用 1e-8f，保持和py一致
-        float db = 10.0f * log10f(x);
-        logmel_out[i] = db;
-        if (db > max_db) max_db = db;              // 同步求最大值
-    }
+//     // Step 1: 一次遍历同时做 log10 + 找最大值（减少一半循环）
+//     for (int i = 0; i < MEL_BANDS; i++) {
+//         float x = fmaxf(mel_linear[i], 1e-8f);     // 用 1e-8f，保持和py一致
+//         float db = 10.0f * log10f(x);
+//         logmel_out[i] = db;
+//         if (db > max_db) max_db = db;              // 同步求最大值
+//     }
 
-    // Step 2: 应用 top_db = 100  保持和py一致
-    float min_db = max_db - 100.0f;
-    for (int i = 0; i < MEL_BANDS; i++) {
-        // Clip 太小的值
-        if (logmel_out[i] < min_db) logmel_out[i] = min_db;
+//     // Step 2: 应用 top_db = 100  保持和py一致
+//     float min_db = max_db - 100.0f;
+//     for (int i = 0; i < MEL_BANDS; i++) {
+//         // Clip 太小的值
+//         if (logmel_out[i] < min_db) logmel_out[i] = min_db;
 
-        // 强制对齐底噪 (-80 ~ -100 区间容易抖)
-        if (logmel_out[i] < -79.9f) logmel_out[i] = -80.0f;
-    }
-}
+//         // 强制对齐底噪 (-80 ~ -100 区间容易抖)
+//         if (logmel_out[i] < -79.9f) logmel_out[i] = -80.0f;
+//     }
+// }
 

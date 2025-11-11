@@ -35,7 +35,7 @@ extern const float mel_filterbank[MEL_BANDS * NUM_BINS];
 /// 根据功率谱计算 Mel 特征
 /// @param power_spectrum 输入功率谱数组，每帧长度 NUM_BINS
 /// @param mel_out 输出 Mel 特征数组，长度 MEL_BANDS
-void apply_mel(const float* power_spectrum, float* mel_out);
+// void apply_mel(const float* power_spectrum, float* mel_out);   // 测试使用， 测试结果一致性[pass]， 融合logmel会提速10%
 
 
 
