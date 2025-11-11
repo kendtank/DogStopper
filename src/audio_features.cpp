@@ -34,13 +34,14 @@ static float *mfcc_out_all = NULL;    // 存放MFCC特征
  * @brief 打印堆内存和PSRAM使用情况
  */
 static void print_memory_info(void) {
-    Serial.printf("[MEM] 堆内存剩余: %d bytes\n", ESP.getFreeHeap());
+    Serial.printf("[MEM] 堆内存剩余: %2f KB\n", ESP.getFreeHeap() / 1024.0f);
 
     if (psramFound()) {
-        Serial.printf("[MEM] PSRAM总大小: %d bytes\n", ESP.getPsramSize());
-        Serial.printf("[MEM] PSRAM可用: %d bytes\n", ESP.getFreePsram());
+        Serial.printf("[MEM] PSRAM总大小: %2f KB\n", ESP.getPsramSize() / 1024.0f);
+        Serial.printf("[MEM] PSRAM可用: %2f KB\n", ESP.getFreePsram() / 1024.0f);
     }
 }
+
 
 
 /**
@@ -94,6 +95,42 @@ int compute_logmel_from_float(const float *input_normalized, float *output) {
     print_memory_info();
     print_time_cost("compute_logmel_from_float", start_time);
     return NUM_FRAMES;
+}
+
+
+int compute_mfcc_from_float(const float *input, float *output){
+    
+    // 调试：内存与计时
+    print_memory_info();
+    uint32_t start_mfcc_time1 = start_timer();
+
+
+    // 对得到的logmel特征做一次DCT-II变换，取前13维
+    int num_frames =  compute_logmel_from_float(input, log_mel_out_all);
+    if (num_frames != NUM_FRAMES){
+        #if DEBUG_FEATURES
+        Serial.printf("compute_logmel_200ms failed, ret=%d\n", num_frames);
+        #endif
+        return -1;
+    }
+    // 调试：内存与计时
+    print_memory_info();
+    uint32_t start_mfcc_time2 = start_timer();
+
+    // 13维MFCC特征提取
+    for (int i = 0; i < NUM_FRAMES; i++) {
+        const float *logmel_frame = log_mel_out_all + i * N_MEL_BINS; // 输入：log-Mel
+        float *mfcc_frame = output + i * N_MFCC;                      // 直接写到用户输出
+        compute_mfcc(logmel_frame, mfcc_frame);
+    }
+
+    // 打印内存和时间开销
+    print_memory_info();
+    print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);
+    print_time_cost("总计算mfcc时间开销", start_mfcc_time1);
+
+
+    return num_frames;
 }
 
 
@@ -165,9 +202,14 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
     print_memory_info();
     uint32_t start_time = start_timer();
 
-    // 1.PCM 数据转浮点数
+    // 1.PCM 数据转浮点数  避免异常数据，虽然int16_t 数据范围 [-32768, 32767]，但可能存在异常数据
     for (int i = 0; i < INPUT_SAMPLES; i++) {
-        fp_pcm_src[i] = (float)input[i] / 32768.0f;  // 归一化到 [-1, 1]
+        float sample = input[i];
+        // 注意：直接转 float 不会溢出，但可能有非法大值
+        if (sample > 32767.0f) sample = 32767.0f;
+        else if (sample < -32768.0f) sample = -32768.0f;
+        fp_pcm_src[i] = sample / 32768.0f;
+        // fp_pcm_src[i] = (float)input[i] / 32768.0f;  // 归一化到 [-1, 1]
     }
 
     // 2.对输入帧加汉宁窗，注意：汉宁窗的初始化已经在hann_frame.h中定义调用就会自动初始化
@@ -226,23 +268,36 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
  * @return 成功返回帧数，失败返回负数
  */
 int compute_mfcc_200ms(const int16_t *input, float *output){
-    // 对得到的logmel特征做一次DCT-II变换，取前13维
-    // int num_frame =  compute_logmel_200ms(input, log_mel_out_all);
-    // if (num_frame != NUM_FRAMES){
-    //     #if DEBUG_FEATURES
-    //     Serial.printf("compute_logmel_200ms failed, ret=%d\n", num_frame);
-    //     #endif
-    //     return -1;
-    // }
-    // print_memory_info();
-    // uint32_t start_mfcc_time = start_timer();
-    // // 13维MFCC特征提取
-    // for (int i = 0; i < NUM_FRAMES; i++) {
-    //     const float* logmel_frame = logmel_frame + i * N_MEL_BINS;  // 指向第i帧的log-Mel
-    //     float* mfcc_frame = mfcc_out_all + i * N_MFCC;    // 指向第i帧的MFCC输出
-        
-    //     compute_mfcc(logmel_frame, mfcc_frame);  // 正确调用
-    // }
+    
+    // 调试：内存与计时
+    print_memory_info();
+    uint32_t start_mfcc_time1 = start_timer();
 
-    return 0;
+
+    // 对得到的logmel特征做一次DCT-II变换，取前13维
+    int num_frames =  compute_logmel_200ms(input, log_mel_out_all);
+    if (num_frames != NUM_FRAMES){
+        #if DEBUG_FEATURES
+        Serial.printf("compute_logmel_200ms failed, ret=%d\n", num_frames);
+        #endif
+        return -1;
+    }
+    // 调试：内存与计时
+    print_memory_info();
+    uint32_t start_mfcc_time2 = start_timer();
+
+    // 13维MFCC特征提取
+    for (int i = 0; i < NUM_FRAMES; i++) {
+        const float *logmel_frame = log_mel_out_all + i * N_MEL_BINS; // 输入：log-Mel
+        float *mfcc_frame = output + i * N_MFCC;                      // 直接写到用户输出
+        compute_mfcc(logmel_frame, mfcc_frame);
+    }
+
+    // 打印内存和时间开销
+    print_memory_info();
+    print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);
+    print_time_cost("总计算mfcc时间开销", start_mfcc_time1);
+
+
+    return num_frames;
 }

@@ -1,5 +1,6 @@
 #include "mel_filterbank.h"
 #include <math.h>
+#include "esp_dsp.h"
 
 /// ================================
 /// Mel滤波器数组定义
@@ -7,7 +8,7 @@
 /// 放在PSRAM节区，避免占用内部RAM
 /// 验证c和python结果一致性[pass]  1e-5f 误差范围内一致  TODO: 是否需要加static
 /// ================================
-const float mel_filterbank[MEL_BANDS * NUM_BINS] 
+const static float mel_filterbank[MEL_BANDS * NUM_BINS] 
     __attribute__((section(".psram"))) = {
     #include "mel_filterbank_data.h"   // 这里是Python生成的纯数据内容文件
 };
@@ -43,19 +44,24 @@ const float mel_filterbank[MEL_BANDS * NUM_BINS]
 
 
 void apply_log_mel(const float* power_spectrum, float* logmel_out) {
+    // 把一帧的功率谱 → 通过 Mel 滤波器组 → 得到 64个 Mel 能量
     const float amin = 1e-8f;     // 防止 log(0)
     const float top_db = 100.0f;  // 限制动态范围
     const float log10_const = 0.43429448f; // log10(x) = log(x) * 0.43429
     float max_db = -INFINITY;
 
-    // 遍历每一个 mel 滤波器
+    // 遍历每一个 mel 滤波器  循环 64次
     for (int i = 0; i < MEL_BANDS; i++) {
         float sum = 0.0f;
 
         // 计算 mel 滤波加权能量
-        for (int j = 0; j < NUM_BINS; j++) {
-            sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
-        }
+        // for (int j = 0; j < NUM_BINS; j++) {
+        //     sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
+        // }
+
+        // 注意：矩阵–向量乘法， MCU 上没矩阵乘库，只能拆成 64 次 dot， 可以理解为每一个滤波器都和功率点做一次点积， 只是需要取前64个点进行点积。 语义有点反人类
+        dsps_dotprod_f32_aes3(&mel_filterbank[i * NUM_BINS], power_spectrum, &sum, NUM_BINS);   // 使用点积加速计算   提速5ms
+
 
         // 加上安全下限，防止 log(0)
         if (sum < amin) sum = amin;
