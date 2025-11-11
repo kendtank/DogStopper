@@ -44,7 +44,9 @@ def save_to_header(array, name, out_path, float_type='float'):
     lines = []
     line = []
     for i, val in enumerate(flat):
-        line.append(f"{val:.8f}")
+        # line.append(f"{val:.8f}")
+        # 替换这一行
+        line.append(f"{val:.10e}f")   # 注意结尾的 'f'！
         if (i + 1) % 8 == 0:
             lines.append(", ".join(line) + ",")
             line = []

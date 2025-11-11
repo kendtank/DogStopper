@@ -64,6 +64,39 @@ static void print_time_cost(const char* func_name, uint32_t start_time) {
 }
 
 
+// 由于算法在静音端，一直有3db的误差，使用一样的信号，执行算法，看看误差如何
+int compute_logmel_from_float(const float *input_normalized, float *output) {
+    print_memory_info();
+    uint32_t start_time = start_timer();
+    // 因为 frames_win 应该只读输入
+    #if DEBUG_FEATURES
+        int num_frames = frames_win(input_normalized, frames_src, INPUT_SAMPLES);
+        Serial.printf("frames_win: %d frames\n", num_frames);
+    #else
+        (void)frames_win(input_normalized, frames_src, INPUT_SAMPLES);
+    #endif
+
+    // ... 后续 FFT、Mel 不变 ...
+    fft_power_init(N_FFT);
+    int ret = fft_power_compute(frames_src, NUM_FRAMES, FRAME_LENGTH, N_FFT, power_out);
+    if (ret != 0) {
+        #if DEBUG_FEATURES
+            Serial.printf("fft_power_compute failed, ret=%d\n", ret);
+        #endif
+        fft_power_free();
+        return -1;
+    }
+
+    for (int i = 0; i < NUM_FRAMES; i++) {
+        apply_log_mel(power_out + i*(N_FFT/2+1), output + i*N_MEL_BINS);
+    }
+
+    print_memory_info();
+    print_time_cost("compute_logmel_from_float", start_time);
+    return NUM_FRAMES;
+}
+
+
 #else  // 调试关闭为0，完全不生成任何函数或代码
 
 // 定义空宏，调用处完全不生成代码
@@ -193,5 +226,23 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
  * @return 成功返回帧数，失败返回负数
  */
 int compute_mfcc_200ms(const int16_t *input, float *output){
+    // 对得到的logmel特征做一次DCT-II变换，取前13维
+    // int num_frame =  compute_logmel_200ms(input, log_mel_out_all);
+    // if (num_frame != NUM_FRAMES){
+    //     #if DEBUG_FEATURES
+    //     Serial.printf("compute_logmel_200ms failed, ret=%d\n", num_frame);
+    //     #endif
+    //     return -1;
+    // }
+    // print_memory_info();
+    // uint32_t start_mfcc_time = start_timer();
+    // // 13维MFCC特征提取
+    // for (int i = 0; i < NUM_FRAMES; i++) {
+    //     const float* logmel_frame = logmel_frame + i * N_MEL_BINS;  // 指向第i帧的log-Mel
+    //     float* mfcc_frame = mfcc_out_all + i * N_MFCC;    // 指向第i帧的MFCC输出
+        
+    //     compute_mfcc(logmel_frame, mfcc_frame);  // 正确调用
+    // }
+
     return 0;
 }

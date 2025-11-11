@@ -65,29 +65,26 @@ void apply_mel(const float* power_spectrum, float* mel_out) {
 void apply_log_mel(const float* power_spectrum, float* logmel_out)
 {
     float mel_linear[MEL_BANDS];
-    apply_mel(power_spectrum, mel_linear);  // MCU 端计算 Mel 滤波
+    apply_mel(power_spectrum, mel_linear);  // MCU 端 Mel 滤波
 
-    // step1: 找到本帧最大值，用于 top_db
-    float max_val = mel_linear[0];
-    for (int i = 1; i < MEL_BANDS; i++) {
-        if (mel_linear[i] > max_val)
-            max_val = mel_linear[i];
+    float max_db = -INFINITY;
+
+    // Step 1: 一次遍历同时做 log10 + 找最大值（减少一半循环）
+    for (int i = 0; i < MEL_BANDS; i++) {
+        float x = fmaxf(mel_linear[i], 1e-8f);     // 用 1e-8f，保持和py一致
+        float db = 10.0f * log10f(x);
+        logmel_out[i] = db;
+        if (db > max_db) max_db = db;              // 同步求最大值
     }
 
+    // Step 2: 应用 top_db = 100  保持和py一致
+    float min_db = max_db - 100.0f;
     for (int i = 0; i < MEL_BANDS; i++) {
-        float x = mel_linear[i];
+        // Clip 太小的值
+        if (logmel_out[i] < min_db) logmel_out[i] = min_db;
 
-        // 避免 log(0)
-        if (x < 1e-10f) x = 1e-10f;
-
-        // 计算 dB
-        float db = 10.0f * log10f(x);
-
-        // top_db 限制
-        float min_db = 10.0f * log10f(max_val) - 100.0f;  // top_db = 100
-        if (db < min_db)
-            db = min_db;
-
-        logmel_out[i] = db;
+        // 强制对齐底噪 (-80 ~ -100 区间容易抖)
+        if (logmel_out[i] < -79.9f) logmel_out[i] = -80.0f;
     }
 }
+

@@ -87,6 +87,14 @@ int compute_logmel_200ms(const int16_t *input, float *output);
 
 
 
+#if DEBUG_FEATURES
+// 测试使用float输入  测试算法的准确度
+int compute_logmel_from_float(const float *input_normalized, float *output);
+#endif
+
+
+
+
 /**
  * @brief 提取200ms音频的MFCC特征
  *
