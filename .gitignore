@@ -1,4 +1,14 @@
 .pio/
 .vscode/
+__pycache__/
+.idea/
 .data/
-.*txt
+*.npy
+*.pyc
+*.wav
+*.keras
+*.tflite
+*.txt
+*.mp3
+python/tinyml/test_int8_model_by_wav/detected_barks_float/
+python/tinyml/test_int8_model_by_wav/detected_barks_int8/

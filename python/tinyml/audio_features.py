@@ -2,7 +2,7 @@
 """
 @Time    : 2025/11/12 14:16
 @Author  : Kend
-@FileName: combare_mcu_py
+@FileName: audio_features
 @Software: PyCharm
 @modifier:
 """
@@ -147,7 +147,7 @@ def compute_mfcc(wave):
     """计算 log-mel 特征"""
     win_py = get_window("hann", frame_size, fftbins=True).astype(np.float32)
     frames = librosa.util.frame(wave, frame_length=frame_size, hop_length=hop).astype(np.float32)
-    print("分帧的数组形状", frames.shape)
+    # print("分帧的数组形状", frames.shape)
     frames_win = frames * win_py[:, None]   # 矩阵乘矩阵
     # print("frames_win.shape", frames_win.shape)
     y = frames_win.astype(np.float32)
@@ -172,7 +172,7 @@ def compute_mfcc(wave):
     dct_matrix = get_dct_matrix()
     # 使用 scipy.fftpack.dct实现DCT
     mfcc_scipy = dct(Sdb_py, axis=0, type=2, norm='ortho')[:13].astype(np.float32)
-    print("shape of mfcc_scipy:", mfcc_scipy.shape)
+    # print("shape of mfcc_scipy:", mfcc_scipy.shape)
     # print("mfcc:", mfcc_scipy)
     return mfcc_scipy.T
 
