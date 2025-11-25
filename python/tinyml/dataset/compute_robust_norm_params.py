@@ -165,6 +165,7 @@ def main():
     print(f"共收集 {len(all_vals)} 个 MFCC 系数值")
 
     # 计算 robust min/max
+    # 先 线性拉伸到目标区间 [target_min, target_max], 最终映射到 [-1, 1]
     x_low = np.percentile(all_vals, args.percentile_low)
     x_high = np.percentile(all_vals, args.percentile_high)
 

@@ -1,135 +1,105 @@
-// main.cpp - 在 ESP32 上测试 int8 狗吠模型（随机输入）
 #include <Arduino.h>
-// TensorFlow Lite Micro 头文件
-#include <Arduino.h>
-#include "TensorFlowLite_ESP32.h"
-#include "tensorflow/lite/micro/all_ops_resolver.h"
-#include "tensorflow/lite/micro/micro_error_reporter.h"
-#include "tensorflow/lite/micro/micro_interpreter.h"
-#include "tensorflow/lite/schema/schema_generated.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "audio_input.h"
+#include "audio_consumer.h"
 
-#include "../python/tinyml/model/dog_bark_model.cc"  // 包含模型数组
+// ====================== 任务栈大小 ======================
+#define AUDIO_PRODUCER_STACK 8192
+#define AUDIO_CONSUMER_STACK 8192
+#define TINYML_CONSUMER_STACK 4096
 
+// ====================== 音频生产者任务 ======================
+void AudioProducerTask(void* param)
+{
+    Serial.println("[Producer] init...");
 
-// === 全局对象（和你原来一致）===
-tflite::MicroErrorReporter micro_error_reporter;
-constexpr int kTensorArenaSize = 8 * 1024; // 8KB 足够大多数小模型
-alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+    // 等待队列初始化完成（audio_input_init里创建）
+    while (audio_queue == NULL) {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
 
-const tflite::Model* model = nullptr;
-tflite::MicroInterpreter* interpreter = nullptr;
-TfLiteTensor* input = nullptr;
-TfLiteTensor* output = nullptr;
+    Serial.println("[Producer] start");
 
-void setup() {
+    // 使用封装的生产者循环
+    audio_input_task(param);
 
-  Serial.begin(115200);
-  while (!Serial);
-  Serial.println("Dog Bark Model Test (Random Input)");
-  #ifdef ESP_NN
-  Serial.println("✅ Using esp_nn acceleration!");
-    #endif
-
-  model = tflite::GetModel(g_bark_model); // 传入模型数组！
-
-
-  static tflite::AllOpsResolver resolver;
-  static tflite::MicroInterpreter static_interpreter(
-      model, resolver, tensor_arena, kTensorArenaSize, &micro_error_reporter);
-  interpreter = &static_interpreter;
-
-  if (interpreter->AllocateTensors() != kTfLiteOk) {
-    Serial.println("AllocateTensors failed");
-    while (1);
-  }
-
-  input = interpreter->input(0);
-  output = interpreter->output(0);
-
-  // 打印类型和形状
-  Serial.print("Input type: ");
-  Serial.println(input->type == kTfLiteFloat32 ? "float32" : (input->type == kTfLiteInt8 ? "int8" : "unknown"));
-  Serial.print("Output type: ");
-  Serial.println(output->type == kTfLiteFloat32 ? "float32" : (output->type == kTfLiteInt8 ? "int8" : "unknown"));
-
-  Serial.print("Input shape: ");
-  for (int i = 0; i < input->dims->size; i++) Serial.print(input->dims->data[i]), Serial.print(" ");
-  Serial.println();
-
+    vTaskDelete(NULL);
 }
 
+// ====================== 音频消费者任务 ======================
+void AudioConsumerTask(void* param)
+{
+    Serial.println("[Consumer] init...");
 
+    static VADContext vad_ctx;
 
-
-void loop() {
-  // 根据模型类型填充随机输入
-  if (input->type == kTfLiteFloat32) {
-    int num_floats = input->bytes / sizeof(float);
-    for (int i = 0; i < num_floats; i++) {
-      input->data.f[i] = (float)random(100) / 100.0f; // 0.0 ~ 1.0
+    if (!vad_consumer_init(&vad_ctx)) {
+        Serial.println("[Consumer] vad_consumer_init FAILED");
+        vTaskDelete(NULL);
+        return;
     }
-  } else if (input->type == kTfLiteInt8) {
-    int num_int8 = input->bytes;
-    for (int i = 0; i < num_int8; i++) {
-      input->data.int8[i] = (int8_t)(random(256) - 128); // -128 ~ 127
-    }
-  } else {
-    Serial.println("❓ Unsupported input type");
-    delay(2000);
-    return;
-  }
 
-  if (interpreter->Invoke() != kTfLiteOk) {
-    Serial.println("Invoke failed!");
+    Serial.println("[Consumer] start");
+
+    // 每次取一个 block
+    int16_t pcm_buf[BLOCK_SAMPLES];
+
+    while (true)
+    {
+        // 阻塞等待 audio_queue 出队
+        if (xQueueReceive(audio_queue, pcm_buf, portMAX_DELAY) == pdTRUE)
+        {
+            // 调用封装函数处理
+            vad_consumer_process_block(&vad_ctx, pcm_buf);
+        }
+    }
+}
+
+// ====================== TinyML 队列消费者 ======================
+void TinymlMfccQueueConsumerTask(void* param)
+{
+    Serial.println("[TinyML] start...");
+
+    TinyMLEvent ev;
+
+    while (true)
+    {
+        if (xQueueReceive(tinyml_mfcc_queue, &ev, portMAX_DELAY) == pdTRUE)
+        {
+            // Serial.printf("[TinyML] recv event");
+        }
+    }
+}
+
+// ====================== setup ======================
+void setup()
+{
+    Serial.begin(115200);
     delay(1000);
-    return;
-  }
+    Serial.println("\n=== TinyML Queue Test Start ===");
 
-  // 读取输出
-  if (input->type == kTfLiteFloat32) {
-    int num_floats = input->bytes / sizeof(float);
-    for (int i = 0; i < num_floats; i++) {
-      input->data.f[i] = (float)random(100) / 100.0f;
+    // 初始化音频输入（包括队列 + DC滤波器预热）
+    if (!audio_input_init()) {
+        Serial.println("[setup] audio_input_init FAILED");
+        while (1) { vTaskDelay(1000 / portTICK_PERIOD_MS); }
     }
-  } else if (input->type == kTfLiteInt8) {
-    int num_int8 = input->bytes;
-    for (int i = 0; i < num_int8; i++) {
-      input->data.int8[i] = (int8_t)(random(256) - 128);
-    }
-  } else {
-    Serial.println("❓ Unsupported input type");
-    delay(2000);
-    return;
-  }
 
-  // ====== 开始计时 ======
-  uint32_t start_us = micros();
+    // 创建任务
+    xTaskCreatePinnedToCore(AudioProducerTask, "AudioProducerTask",
+                            AUDIO_PRODUCER_STACK, NULL, 10, NULL, 0);
+    delay(100);
 
-  TfLiteStatus invoke_status = interpreter->Invoke();
+    xTaskCreatePinnedToCore(AudioConsumerTask, "AudioConsumerTask",
+                            AUDIO_CONSUMER_STACK, NULL, 9, NULL, 0);
+    delay(100);
 
-  uint32_t end_us = micros();
-  uint32_t inference_time_us = end_us - start_us;
-  // =====================
+    xTaskCreatePinnedToCore(TinymlMfccQueueConsumerTask, "TinymlMfccTask",
+                            TINYML_CONSUMER_STACK, NULL, 8, NULL, 1);
+}
 
-  if (invoke_status != kTfLiteOk) {
-    Serial.println("Invoke failed!");
-    delay(1000);
-    return;
-  }
-
-  // 输出结果（保持不变）
-  if (output->type == kTfLiteFloat32) {
-    float prob = output->data.f[0];
-    Serial.printf("Inference: %.4f (%.2f ms) → %s\n",
-                  prob, inference_time_us / 1000.0, (prob > 0.7f) ? "BARK" : "NO");
-  } else if (output->type == kTfLiteInt8) {
-    int8_t raw = output->data.int8[0];
-    float scale = output->params.scale;
-    int zero_point = output->params.zero_point;
-    float prob = (raw - zero_point) * scale;
-    Serial.printf("Inference: raw=%d, prob=%.4f (%.2f ms) → %s\n",
-                  raw, prob, inference_time_us / 1000.0, (prob > 0.7f) ? "BARK" : "NO");
-  }
-
-  delay(1000);
+// ====================== loop ======================
+void loop()
+{
+    // FreeRTOS 已接管任务，不需要循环
 }
