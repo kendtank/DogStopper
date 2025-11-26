@@ -4,9 +4,12 @@
 #include <math.h>
 #include <esp_log.h>
 #include "esp_heap_caps.h"
+#include <Arduino.h>
 
 
 static const char* TAG = "VAD_MODULE";
+
+static TinyMLEvent discard_event_buf; // 专门用来接收被丢弃的队列元素
 
 // 定义全局生产到mfcc的队列
 // QueueHandle_t tinyml_mfcc_queue = NULL;
@@ -77,9 +80,15 @@ static void assemble_and_push_event(VADContext *ctx) {
         // 队列满了， 直接覆盖旧的数据 注意：是丢弃，不会造成内存泄漏
         // 修改：1125
         // 队列已满，丢弃最旧事件再发送
-        TinyMLEvent dummy;
-        xQueueReceive(ctx->tinyml_queue, &dummy, 0);  // 非阻塞接收
-        xQueueSend(ctx->tinyml_queue, ev, portMAX_DELAY);  // 再发送
+        // TinyMLEvent dummy;
+        // xQueueReceive(ctx->tinyml_queue, &dummy, 0);  // 非阻塞接收
+
+        // 更新：1126 不在栈上做取出
+        xQueueReceive(ctx->tinyml_queue, &discard_event_buf, 0); // 丢弃最旧事件
+        // xQueueSend(ctx->tinyml_queue, ev, portMAX_DELAY);  // 再发送 阻塞的，需要等队列腾出空间
+        if (xQueueSend(ctx->tinyml_queue, ev, 0) != pdTRUE) {
+            ESP_LOGE(TAG, "tinyml_queue still full after discard!"); // 再次发送失败，打印错误
+        }
         // xQueueOverwrite(ctx->tinyml_queue, ev);
         ESP_LOGW(TAG, "tinyml_queue full -> overwrite newest event (len=%d)", ev->length);
     }
@@ -118,7 +127,13 @@ static bool vad_check_window(VADContext *ctx, const int16_t *window) {
         ctx->ema_energy = ctx->ema_alpha * ctx->ema_energy + (1.0f - ctx->ema_alpha) * energy;
     }
 
-    bool is_bark = (ctx->ema_energy >= ctx->energy_threshold) || (zcr >= (int)ctx->zcr_threshold);
+    // 打印一下，调试使用  test: 数据一直在流
+    // Serial.println("ema_energy:");
+    // Serial.println(ctx->ema_energy);
+    // Serial.println("zcr:");
+    // Serial.println(zcr);
+
+    bool is_bark = (ctx->ema_energy >= ctx->energy_threshold) && (zcr >= (int)ctx->zcr_threshold);
 
     // hit和miss作为真假值直接return
     return is_bark;
@@ -126,15 +141,15 @@ static bool vad_check_window(VADContext *ctx, const int16_t *window) {
 
 
 // ==================== vad结构体初始化 ====================
-bool vad_consumer_init(VADContext* ctx, QueueHandle_t queue) {
+bool vad_consumer_init(VADContext* ctx, QueueHandle_t tinyml_queue) {
 
-    if (!ctx) return false;
+    if (!ctx || !tinyml_queue) return false;
 
     // zero 清理
     memset(ctx, 0, sizeof(VADContext));
 
     // 11-25 修改：直接使用传入的队列，不再初始化
-    ctx->tinyml_queue = queue;
+    ctx->tinyml_queue = tinyml_queue;
 
     // // 创建队列（队列元素为 TinyMLEvent 结构体），放在 PSRAM
     // if (tinyml_mfcc_queue == NULL) {

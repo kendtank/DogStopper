@@ -56,7 +56,7 @@
  * 更新：
  *  事件拼接不在push时候完成，在event缓冲的时候就做好了pre_padding和第一次狗吠的全窗拼接
  *  取消post_padding, 因为第一次非吠叫，直接把cur_stride_buf拼接到事件中，后续只有两种可能：1.下次继续非吠叫，直接不处理， push。2.下次是吠叫，直接继续使用cur_stride_buf拼接到event_buff.(节省了2kb)
- *  FreeRTOS 支持把队列数据放在 PSRAM， 把tinyml_mfcc_queue,放在psram， 事件结构体还是放在RAM中
+ *  FreeRTOS 支持把队列数据放在 PSRAM， 消费者内部不在管理tinyml_mfcc_queue队列, (放在psram)， 事件结构体还是放在RAM中
  */
 
 #ifndef AUDIO_CONSUMER_H
@@ -106,7 +106,7 @@ extern "C" {
 
 // 默认判定阈值（运行时调整）
 #define DEFAULT_ENERGY_THRESHOLD  120000.0f
-#define DEFAULT_ZCR_THRESHOLD     400.0f
+#define DEFAULT_ZCR_THRESHOLD     260.0f
 #define DEFAULT_EMA_ALPHA          0.8f
 
 
@@ -122,7 +122,7 @@ typedef struct {
 // VAD 上下文结构体
 // =======================================
 typedef struct {
-    QueueHandle_t tinyml_queue;  // 输出队列，供 tinyML 消费
+    QueueHandle_t tinyml_queue;  // 外部创建的给mfcc推理的消费队列句柄，初始化时绑定
 
     // ---------------- 临时事件缓冲 ----------------
     TinyMLEvent tmp_event;  // 放在RAM中，避免栈溢出
@@ -164,7 +164,7 @@ typedef struct {
 
 
 
-// 初始化 VAD 消费端
+// 初始化 VAD 消费端， tinyml_queue由模块外部管理，定义，这里只传递句柄
 bool vad_consumer_init(VADContext* ctx, QueueHandle_t tinyml_queue);
 
 // 处理流式音频的入口： MCU 生产者队列是 单 block 出队，每次轮询拿到一个 block后调用。
