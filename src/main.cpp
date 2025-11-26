@@ -97,11 +97,26 @@ void TinyMLConsumerTask(void* param)
         if (xQueueReceive(q, &evt, portMAX_DELAY) == pdTRUE) {
             // 调用 TinyML 消费函数，这里只做打印时间的长度（音频点数和毫秒数）
             Serial.printf("[TinyML Consumer] Event length: %d samples, %d ms\n", evt.length, evt.length * 1000 / MIC_SAMPLE_RATE);
+            int32_t delayMs = millis() - evt.timestamp_ms;
+            Serial.printf("Event delay: %d ms\n", delayMs);
         } else {
             Serial.println("[TinyML Consumer] Queue receive FAILED");
         }
     }
 }
+
+
+// ==================== 内存打印任务 ====================
+void MonitorMemoryTask(void* param) {
+    const uint32_t intervalMs = 60000; // 1分钟
+    while(true) {
+        vTaskDelay(pdMS_TO_TICKS(intervalMs));
+
+        Serial.printf("[MEM] PSRAM总: %d KB, 可用: %d KB\n", ESP.getPsramSize()/1024, ESP.getFreePsram()/1024);
+        Serial.printf("[MEM] 内部堆总: %d KB, 可用: %d KB\n", ESP.getHeapSize()/1024, ESP.getFreeHeap()/1024);
+    }
+}
+
 
 
 // ==================== setup ====================
@@ -110,6 +125,12 @@ void setup()
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n=== Audio Stream Test Start ===");
+    Serial.printf("[MEM] PSRAM总大小: %d KB\n", ESP.getPsramSize() / 1024);
+    Serial.printf("[MEM] PSRAM可用: %d KB\n", ESP.getFreePsram() / 1024);
+    Serial.printf("[MEM] 内部RAM总堆: %d KB\n", ESP.getHeapSize() / 1024);
+    Serial.printf("[MEM] 内部RAM可用: %d KB\n", ESP.getFreeHeap() / 1024);
+
+
 
     // ===== audio_queue =====
     audio_queue = xQueueCreateStatic(
@@ -156,8 +177,14 @@ void setup()
     xTaskCreatePinnedToCore(AudioConsumerTask, "VADConsumer", 8192, (void*)audio_queue, 9, NULL, 1);
 
     xTaskCreatePinnedToCore(AudioProducerTask, "AudioProducer", 8192, (void*)audio_queue, 10, NULL, 0);
-    
-    
+
+
+    // 创建监控任务
+    xTaskCreatePinnedToCore(MonitorMemoryTask, "Monitor", 2048, NULL, 5, NULL, 1);
+
+    Serial.println("All tasks started");
+
+
 }
 
 // ==================== loop ====================
@@ -165,3 +192,18 @@ void loop()
 {
     // FreeRTOS 已接管，不需要操作
 }
+
+
+/*
+=== Audio Stream Test Start ===
+[MEM] PSRAM总大小: 8189 KB
+[MEM] PSRAM可用: 8189 KB
+[MEM] 内部RAM总堆: 292 KB
+[MEM] 内部RAM可用: 244 KB
+Queue create OK
+[TinyML Consumer] start consuming MFCC events...
+[VAD Consumer] start consuming audio...
+All tasks started
+[Producer] init done, start streaming...
+
+*/

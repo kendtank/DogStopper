@@ -71,17 +71,19 @@ static void assemble_and_push_event(VADContext *ctx) {
     // ram->ram
     memcpy(ev->samples, ctx->event_buf, len * sizeof(int16_t));
     ev->length = len;
+    ev->timestamp_ms = millis();
 
     // 准备push到队列
     if (!ctx->tinyml_queue) return;
 
-    BaseType_t ret = xQueueSend(ctx->tinyml_queue, ev, portMAX_DELAY);
+    BaseType_t ret = xQueueSend(ctx->tinyml_queue, ev, 0);   // 非阻塞发送
     if (ret != pdTRUE) {
         // 队列满了， 直接覆盖旧的数据 注意：是丢弃，不会造成内存泄漏
         // 修改：1125
         // 队列已满，丢弃最旧事件再发送
         // TinyMLEvent dummy;
         // xQueueReceive(ctx->tinyml_queue, &dummy, 0);  // 非阻塞接收
+        Serial.println("[Consumer] tinyml_queue full, dropping sample...");
 
         // 更新：1126 不在栈上做取出
         xQueueReceive(ctx->tinyml_queue, &discard_event_buf, 0); // 丢弃最旧事件
@@ -369,7 +371,7 @@ void vad_consumer_process_block(VADContext* ctx, const int16_t* new_block) {
 
     // 二次保护，虽然在push函数和拼接函数内部已经做了保护，但是为了保险，这里再做一次保护
     // 前面push了的，状态机会清0，这里就不会进来了的
-    if (ctx->event_pos >= EVENT_MAX_SAMPLES) {
+    if (ctx->event_pos >= EVENT_OUTPUT_MAX_SAMPLES) {
         vad_force_push_event(ctx);
     }
 

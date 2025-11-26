@@ -84,6 +84,7 @@ DMA生产者模块 (audio_input.cpp)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include <Arduino.h>
 
 // // =================== 内部配置 ===================
 // #define TEMP_BUFFER_SAMPLES 256        // 批量大小（PCM块）每次从DMA读取的样本数，i2s_read(), 意思就是说dma  buffer 64 * 4 读满了一半，就取走。设置512，就全部满了一次取走，延迟大点，cpu轮询次数降低.  256点音频 就是   256 / 16000  = 16ms 的音频数据
@@ -328,7 +329,7 @@ void audio_input_task(void* param) {
         BaseType_t res = xQueueSend(q, temp_buffer, 0);   // 非阻塞发送
 
         if (res != pdTRUE) {
-
+            Serial.println("[Producer] audio queue full, dropping sample...");
             int16_t dummy[TEMP_BUFFER_SAMPLES];
             // 队列满，覆盖老数据（优先新，高召回）
             xQueueReceive(q, dummy, 0);   // 非阻塞弹出， 最旧的数据

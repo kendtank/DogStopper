@@ -105,7 +105,7 @@ extern "C" {
 #define QUEUE_DEPTH          10   // tinyml 队列深度, 设置为 10，即最多10个候选片段， 尽可能牺牲内存换取数据不丢(26*256*int16 * 10) 130kb  （TODO: RAM?PSRAM?）
 
 // 默认判定阈值（运行时调整）
-#define DEFAULT_ENERGY_THRESHOLD  120000.0f
+#define DEFAULT_ENERGY_THRESHOLD  150000.0f
 #define DEFAULT_ZCR_THRESHOLD     260.0f
 #define DEFAULT_EMA_ALPHA          0.8f
 
@@ -115,6 +115,7 @@ extern "C" {
 typedef struct {
     int16_t samples[EVENT_OUTPUT_MAX_SAMPLES]; // PCM 数据 (整合 pre+event+post)
     int length;                         // 实际有效样本数
+    uint32_t timestamp_ms;   // 放入队列的时间，单位 ms
 } TinyMLEvent;
 
 
