@@ -13,7 +13,7 @@ DMA生产者模块 (audio_input.cpp)
 1. 高可用数据流：
     - 使用FreeRTOS队列（audio_queue）实现生产者-消费者解耦。
     - 队列深度为AUDIO_QUEUE_DEPTH，每个元素为TEMP_BUFFER_SAMPLES大小的PCM块。
-    - 当队列满时，采用覆盖老数据策略（xQueueOverwrite），保证最新音频不丢失。
+    - 当队列满时，采用覆盖老数据策略，保证最新音频不丢失。
     - 丢帧计数器g_drop_count用于监控丢帧情况，可用于日志或报警。
 
 2. 数据质量保障：
@@ -23,25 +23,58 @@ DMA生产者模块 (audio_input.cpp)
 
 3. 异常处理：
     - DMA读取失败或队列满时，任务不会阻塞整个系统，而是延迟或覆盖处理。
-    - 使用互斥锁保护DC滤波器状态，防止多任务同时访问引发数据竞争。
     - 日志节流机制防止频繁打印丢帧信息影响性能。
 
 4. 性能优化：
-    - 热路径函数（如remove_dc）使用IRAM_ATTR放入内部RAM，加快每个样本的滤波计算。
-    - 队列和滤波器操作尽量非阻塞，保证实时性。
+    - 热路径函数（remove_dc）使用IRAM_ATTR放入内部RAM，加快每个样本的滤波计算。
+    - 队列和滤波器操作是非阻塞，保证实时性。
 
 模块依赖：
-    - FreeRTOS (队列、任务、互斥锁)
+    - FreeRTOS (队列、任务)
     - ESP-IDF I2S 驱动
     - esp_log 用于日志打印
 
 使用方式：
+    （外部需要先创建生产队列，并做传参）
     1. 调用 audio_input_init() 初始化I2S、队列和滤波器。
     2. 创建任务 audio_input_task()，作为DMA生产者持续采集数据。
     3. 消费者任务通过 xQueueReceive(audio_queue, ...) 获取PCM数据块进行处理。
 ================================================================================
-*/
+ * 更新：2025-11-26
 
+注意事项（防止 LoadProhibited / 栈溢出 / 队列问题）：
+
+1. 生产者任务参数：
+   - audio_input_task(void* param) 接收的 param 必须是有效 QueueHandle_t
+   - 不能传 NULL，否则访问队列时会触发 LoadProhibited
+
+2. 栈分配：
+   - TEMP_BUFFER_SAMPLES 不要太大，否则生产者任务可能栈溢出， 模块需要的是2kb
+   - 如果采样块大，建议使用 heap 动态分配 buffer
+
+3. 队列容量：
+   - 队列深度 AUDIO_QUEUE_DEPTH * TEMP_BUFFER_SAMPLES 要足够存储短时音频
+   - 否则频繁覆盖老数据，会丢帧
+
+4. DC滤波器：
+   - 滤波器结构体放在IRAM，避免频繁栈操作
+
+5. 日志节流：
+   - 队列满/丢帧日志使用 DROP_LOG_INTERVAL 节流，避免占用 CPU
+
+6. 外部任务调用：详情查看：main audio_producer.cpp
+   - 在 main.cpp 创建任务时，一定要把 audio_queue 传给生产者：
+       xTaskCreatePinnedToCore(
+           AudioProducerTask, 
+           "AudioProducerTask", 
+           8192, 
+           (void*)audio_queue, 
+           10, 
+           NULL, 
+           0
+       );
+================================================================================
+*/
 
 #include "audio_input.h"
 #include <driver/i2s.h>
@@ -52,19 +85,19 @@ DMA生产者模块 (audio_input.cpp)
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-// =================== 内部配置 ===================
-#define TEMP_BUFFER_SAMPLES 256        // 批量大小（PCM块）每次从DMA读取的样本数，i2s_read(), 意思就是说dma  buffer 64 * 4 读满了一半，就取走。设置512，就全部满了一次取走，延迟大点，cpu轮询次数降低.  256点音频 就是   256 / 16000  = 16ms 的音频数据
-#define PREHEAT_SAMPLES 1024           // 预热样本数 开机时用来让DC滤波器稳定
-#define FILTER_A_FLOAT 0.995f          // IIR系数 一阶DC滤波系数
-#define USE_FIXED_POINT 1              // 0: float计算DC滤波，1: Q15定点计算
-#define DROP_LOG_INTERVAL 10          // 队列满丢帧日志节流，每10次打印一次
+// // =================== 内部配置 ===================
+// #define TEMP_BUFFER_SAMPLES 256        // 批量大小（PCM块）每次从DMA读取的样本数，i2s_read(), 意思就是说dma  buffer 64 * 4 读满了一半，就取走。设置512，就全部满了一次取走，延迟大点，cpu轮询次数降低.  256点音频 就是   256 / 16000  = 16ms 的音频数据
+// #define PREHEAT_SAMPLES 1024           // 预热样本数 开机时用来让DC滤波器稳定
+// #define FILTER_A_FLOAT 0.995f          // IIR系数 一阶DC滤波系数
+// #define USE_FIXED_POINT 1              // 0: float计算DC滤波，1: Q15定点计算
+// #define DROP_LOG_INTERVAL 10          // 队列满丢帧日志节流，每10次打印一次
 
 static const char* TAG = "AudioInput";
 
 // =================== 队列 ===================
 // FreeRTOS 队列句柄，用于生产者（DMA）和消费者（VAD/TinyML）解耦
 // 生产者将音频块发送到队列，消费者从队列获取音频块
-QueueHandle_t audio_queue = NULL;
+// QueueHandle_t audio_queue = NULL;
 
 // 丢帧计数
 static volatile uint64_t g_drop_count = 0;  // 当队列满或覆盖数据时统计丢帧数
@@ -89,7 +122,7 @@ static DCFilter dc_filter;
 
 
 // 滤波互斥锁（保护滤波器状态）
-static SemaphoreHandle_t filter_mutex = NULL;
+// static SemaphoreHandle_t filter_mutex = NULL;
 
 
 
@@ -172,21 +205,21 @@ static void preheat_filter_safe(void) {
 
 // 初始化生产者
 bool audio_input_init(void) {
+
     // 创建音频队列（FreeRTOS队列）：
     // 队列深度 = AUDIO_QUEUE_DEPTH，即队列最多可缓存多少个音频批次（批次大小TEMP_BUFFER_SAMPLES）
     // 使用队列保证生产者/消费者线程安全
-    audio_queue = xQueueCreate(AUDIO_QUEUE_DEPTH, TEMP_BUFFER_SAMPLES * sizeof(int16_t));
-    if (audio_queue == NULL) {
-        ESP_LOGE(TAG, "Queue create failed");
-        return false;
-    }
-
+    // audio_queue = xQueueCreate(AUDIO_QUEUE_DEPTH, TEMP_BUFFER_SAMPLES * sizeof(int16_t));
+    // if (audio_queue == NULL) {
+    //     ESP_LOGE(TAG, "Queue create failed");
+    //     return false;
+    // }
     // 创建滤波mutex，保护DC滤波器状态
-    filter_mutex = xSemaphoreCreateMutex();
-    if (filter_mutex == NULL) {
-        ESP_LOGE(TAG, "Mutex create failed");
-        return false;
-    }
+    // filter_mutex = xSemaphoreCreateMutex();
+    // if (filter_mutex == NULL) {
+    //     ESP_LOGE(TAG, "Mutex create failed");
+    //     return false;
+    // }
 
     // 初始化滤波器
 #if USE_FIXED_POINT
@@ -247,46 +280,78 @@ bool audio_input_init(void) {
 }
 
 
-// 生产者任务
+// 生产者任务（param = audio_queue)
 void audio_input_task(void* param) {
+
+    // 通过参数注入队列句柄
+    QueueHandle_t q = static_cast<QueueHandle_t>(param);
+    if (!q) {
+    ESP_LOGE(TAG, "audio_input_task: queue param is NULL, deleting task");
+    vTaskDelete(NULL);
+    return;
+    }
+
+    // 任务一直存在，所以放在函数栈中，这里是256 * int16 512字节
     int16_t temp_buffer[TEMP_BUFFER_SAMPLES];
     size_t bytes_read = 0;
+
+
     while (true) {
+
         // 1. 从DMA读取音频数据
         esp_err_t r = i2s_read(MIC_I2S_PORT, temp_buffer, sizeof(temp_buffer), &bytes_read, portMAX_DELAY);
-        if (r != ESP_OK) {
+        
+        if (r != ESP_OK || bytes_read == 0) {
             vTaskDelay(5 / portTICK_PERIOD_MS);  // 读取失败，稍后重试
             continue;
         }
 
         int samples = (int)(bytes_read / sizeof(int16_t));
 
-        // 2. DC滤波（互斥保护）
-        // 每次处理 PCM 样本时，都会更新dc_filter的变量，使用互斥锁，保证线程安全，实际上，逻辑中只有读取pcm数据，应用滤波才会使用，但是还是加上了锁
-        if (xSemaphoreTake(filter_mutex, portMAX_DELAY) == pdTRUE) {
-            for (int i = 0; i < samples; i++) {
-                temp_buffer[i] = remove_dc(&dc_filter, temp_buffer[i]);
-            }
-            xSemaphoreGive(filter_mutex);
+        // 2. DC滤波（互斥保护）更新： 因为只有这里使用DC滤波器，取消锁
+        for (int i = 0; i < samples; i++) {
+            temp_buffer[i] = remove_dc(&dc_filter, temp_buffer[i]);
         }
+        
+        // 每次处理 PCM 样本时，都会更新dc_filter的变量，使用互斥锁，保证线程安全，实际上，逻辑中只有读取pcm数据，应用滤波才会使用，但是还是加上了锁
+        // if (xSemaphoreTake(filter_mutex, portMAX_DELAY) == pdTRUE) {
+        //     for (int i = 0; i < samples; i++) {
+        //         temp_buffer[i] = remove_dc(&dc_filter, temp_buffer[i]);
+        //     }
+            // xSemaphoreGive(filter_mutex);
+        // }
 
-        // 3.发送到队列（非阻塞，高可用）
-        BaseType_t res = xQueueSend(audio_queue, temp_buffer, 0);
+
+        // NOTE 外部队列必须满足：audio_queue = xQueueCreate(QUEUE_LENGTH, sizeof(int16_t) * TEMP_BUFFER_SAMPLES);
+
+        // 3.发送到队列（非阻塞，+ 覆盖旧数据）
+        BaseType_t res = xQueueSend(q, temp_buffer, 0);   // 非阻塞发送
+
         if (res != pdTRUE) {
+
+            int16_t dummy[TEMP_BUFFER_SAMPLES];
             // 队列满，覆盖老数据（优先新，高召回）
-            xQueueOverwrite(audio_queue, temp_buffer);
-            g_drop_count += TEMP_BUFFER_SAMPLES;
+            xQueueReceive(q, dummy, 0);   // 非阻塞弹出， 最旧的数据
+            BaseType_t res2 = xQueueSend(q, temp_buffer, 0); // 再发送 注意再发送失败，就只能丢这个数据了
+            // 二次尝试发送失败，就只能丢这个数据了
+            if (res2 != pdTRUE) {
+                ESP_LOGW(TAG, "res2 Queue full, dropped sample");
+                g_drop_count += samples;  // 这次也丢了
+            }
+
+            g_drop_count += samples;  // 统计一共丢的样本数
             // 每满10次队列打印一次日志
             if (++drop_log_counter % DROP_LOG_INTERVAL == 0) {
                 ESP_LOGW(TAG, "Queue full, overwrote old. Total dropped: %llu", g_drop_count);
             }
         }
+
     }
 }
 
 
-// 其他API
 
+// 其他API
 
 // 返回累计丢帧数
 uint64_t audio_get_dropped_samples(void) {
@@ -302,18 +367,19 @@ void audio_reset_dropped_counter(void) {
 
 // DC滤波开关, 如果麦克风自带DC滤波可以动态关闭
 void audio_set_dc_filter_enabled(bool enabled) {
-    if (xSemaphoreTake(filter_mutex, portMAX_DELAY) == pdTRUE) {
+    // if (xSemaphoreTake(filter_mutex, portMAX_DELAY) == pdTRUE) {
+
+    // }
 #if USE_FIXED_POINT
-        dc_filter.x_prev = 0;
-        dc_filter.y_prev_q15 = 0;
+    dc_filter.x_prev = 0;
+    dc_filter.y_prev_q15 = 0;
 #else
-        dc_filter.x_prev = 0;
-        dc_filter.y_prev = 0.0f;
+    dc_filter.x_prev = 0;
+    dc_filter.y_prev = 0.0f;
 #endif
-        dc_filter.enabled = enabled;
-        dc_filter.preheated = false;
-        xSemaphoreGive(filter_mutex);
-    }
+    dc_filter.enabled = enabled;
+    dc_filter.preheated = false;
+    // xSemaphoreGive(filter_mutex);
 }
 
 

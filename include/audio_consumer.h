@@ -105,8 +105,8 @@ extern "C" {
 #define QUEUE_DEPTH          10   // tinyml 队列深度, 设置为 10，即最多10个候选片段， 尽可能牺牲内存换取数据不丢(26*256*int16 * 10) 130kb  （TODO: RAM?PSRAM?）
 
 // 默认判定阈值（运行时调整）
-#define DEFAULT_ENERGY_THRESHOLD  5000.0f
-#define DEFAULT_ZCR_THRESHOLD     30.0f
+#define DEFAULT_ENERGY_THRESHOLD  120000.0f
+#define DEFAULT_ZCR_THRESHOLD     400.0f
 #define DEFAULT_EMA_ALPHA          0.8f
 
 
@@ -159,13 +159,13 @@ typedef struct {
 } VADContext;
 
 
-// 暴露 tinyml_queue 队列（消费者用xQueueReceive消费）
-extern QueueHandle_t tinyml_mfcc_queue;  // vad检测出来的候选片段， 初始化函数绑定
+// 暴露 tinyml_queue 队列（消费者用xQueueReceive消费）main函数中初始化，模块中只获取句柄
+// extern QueueHandle_t tinyml_mfcc_queue;  // vad检测出来的候选片段， 初始化函数绑定
 
 
 
 // 初始化 VAD 消费端
-bool vad_consumer_init(VADContext* ctx);
+bool vad_consumer_init(VADContext* ctx, QueueHandle_t tinyml_queue);
 
 // 处理流式音频的入口： MCU 生产者队列是 单 block 出队，每次轮询拿到一个 block后调用。
 void vad_consumer_process_block(VADContext* ctx, const int16_t* new_block);

@@ -9,7 +9,7 @@
 static const char* TAG = "VAD_MODULE";
 
 // 定义全局生产到mfcc的队列
-QueueHandle_t tinyml_mfcc_queue = NULL;
+// QueueHandle_t tinyml_mfcc_queue = NULL;
 
 
 
@@ -71,10 +71,16 @@ static void assemble_and_push_event(VADContext *ctx) {
 
     // 准备push到队列
     if (!ctx->tinyml_queue) return;
-    BaseType_t ret = xQueueSend(ctx->tinyml_queue, ev, 0);
+
+    BaseType_t ret = xQueueSend(ctx->tinyml_queue, ev, portMAX_DELAY);
     if (ret != pdTRUE) {
         // 队列满了， 直接覆盖旧的数据 注意：是丢弃，不会造成内存泄漏
-        xQueueOverwrite(ctx->tinyml_queue, ev);
+        // 修改：1125
+        // 队列已满，丢弃最旧事件再发送
+        TinyMLEvent dummy;
+        xQueueReceive(ctx->tinyml_queue, &dummy, 0);  // 非阻塞接收
+        xQueueSend(ctx->tinyml_queue, ev, portMAX_DELAY);  // 再发送
+        // xQueueOverwrite(ctx->tinyml_queue, ev);
         ESP_LOGW(TAG, "tinyml_queue full -> overwrite newest event (len=%d)", ev->length);
     }
 
@@ -120,45 +126,47 @@ static bool vad_check_window(VADContext *ctx, const int16_t *window) {
 
 
 // ==================== vad结构体初始化 ====================
-bool vad_consumer_init(VADContext* ctx) {
+bool vad_consumer_init(VADContext* ctx, QueueHandle_t queue) {
 
     if (!ctx) return false;
 
     // zero 清理
     memset(ctx, 0, sizeof(VADContext));
 
-    // 创建队列（队列元素为 TinyMLEvent 结构体），放在 PSRAM
-    if (tinyml_mfcc_queue == NULL) {
-        // 使用 heap_caps_malloc 在 PSRAM 分配队列内存  
-        uint8_t *queue_buf = (uint8_t *)heap_caps_malloc(QUEUE_DEPTH * sizeof(TinyMLEvent), MALLOC_CAP_SPIRAM);
-        if (!queue_buf) {
-            ESP_LOGE(TAG, "PSRAM malloc for tinyml_queue failed");
-            return false;
-        }
+    // 11-25 修改：直接使用传入的队列，不再初始化
+    ctx->tinyml_queue = queue;
 
-        // 静态队列结构体放在内部 RAM
-        static StaticQueue_t tinyml_queue_struct;
+    // // 创建队列（队列元素为 TinyMLEvent 结构体），放在 PSRAM
+    // if (tinyml_mfcc_queue == NULL) {
+    //     // 使用 heap_caps_malloc 在 PSRAM 分配队列内存  
+    //     uint8_t *queue_buf = (uint8_t *)heap_caps_malloc(QUEUE_DEPTH * sizeof(TinyMLEvent), MALLOC_CAP_SPIRAM);
+    //     if (!queue_buf) {
+    //         ESP_LOGE(TAG, "PSRAM malloc for tinyml_queue failed");
+    //         return false;
+    //     }
 
-        // 静态创建队列，队列内存由 PSRAM 提供
-        tinyml_mfcc_queue = xQueueCreateStatic(
-            QUEUE_DEPTH,
-            sizeof(TinyMLEvent),
-            queue_buf,
-            &tinyml_queue_struct
-        );
+    //     // 静态队列结构体放在内部 RAM
+    //     static StaticQueue_t tinyml_queue_struct;
 
-        if (!tinyml_mfcc_queue) {
-            ESP_LOGE(TAG, "create tinyml_queue failed");
-            return false;
-        }
-    }
+    //     // 静态创建队列，队列内存由 PSRAM 提供
+    //     tinyml_mfcc_queue = xQueueCreateStatic(
+    //         QUEUE_DEPTH,
+    //         sizeof(TinyMLEvent),
+    //         queue_buf,
+    //         &tinyml_queue_struct
+    //     );
 
-    // 绑定结构体中的指针队列就是这个对外暴露的生产队列
-    ctx->tinyml_queue = tinyml_mfcc_queue;
+    //     if (!tinyml_mfcc_queue) {
+    //         ESP_LOGE(TAG, "create tinyml_queue failed");
+    //         return false;
+    //     }
+    // }
+    // // 绑定结构体中的指针队列就是这个对外暴露的生产队列
+    // ctx->tinyml_queue = tinyml_mfcc_queue;
 
     // 初始阈值 & EMA
     ctx->ema_alpha = DEFAULT_EMA_ALPHA;                  // 平滑因子（可调整）
-    ctx->ema_energy = 0.0f;
+    ctx->ema_energy = 1.0f;
     // 初始经验阈值
     ctx->energy_threshold = DEFAULT_ENERGY_THRESHOLD;
     ctx->zcr_threshold = DEFAULT_ZCR_THRESHOLD;
