@@ -28,7 +28,7 @@ void fft_power_init(int nfft)
 {
     // 如果已经初始化且相同大小，直接返回
     if (fft_initialized && fft_size == nfft) {
-        Serial.println("fft_power_init: 已初始化，无需重复");
+        // Serial.println("fft_power_init: 已初始化，无需重复");
         return;
     }
 
@@ -107,7 +107,7 @@ int fft_power_compute(const float *frames_in, int num_frames, int frame_size, in
         // 这一帧处理完成... 下一帧开始
     }
 
-    Serial.println("fft_power_compute: 功率谱计算完成");
+    // Serial.println("fft_power_compute: 功率谱计算完成");
     return 0;
 }
 

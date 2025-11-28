@@ -67,8 +67,8 @@ static void print_time_cost(const char* func_name, uint32_t start_time) {
 
 // 由于算法在静音端，一直有3db的误差，使用一样的信号，执行算法，看看误差如何
 int compute_logmel_from_float(const float *input_normalized, float *output) {
-    print_memory_info();
-    uint32_t start_time = start_timer();
+    // print_memory_info();
+    // uint32_t start_time = start_timer();
     // 因为 frames_win 应该只读输入
     #if DEBUG_FEATURES
         int num_frames = frames_win(input_normalized, frames_src, INPUT_SAMPLES);
@@ -92,8 +92,8 @@ int compute_logmel_from_float(const float *input_normalized, float *output) {
         apply_log_mel(power_out + i*(N_FFT/2+1), output + i*N_MEL_BINS);
     }
 
-    print_memory_info();
-    print_time_cost("compute_logmel_from_float", start_time);
+    // print_memory_info();
+    // print_time_cost("compute_logmel_from_float", start_time);
     return NUM_FRAMES;
 }
 
@@ -101,8 +101,8 @@ int compute_logmel_from_float(const float *input_normalized, float *output) {
 int compute_mfcc_from_float(const float *input, float *output){
     
     // 调试：内存与计时
-    print_memory_info();
-    uint32_t start_mfcc_time1 = start_timer();
+    // print_memory_info();
+    // uint32_t start_mfcc_time1 = start_timer();
 
 
     // 对得到的logmel特征做一次DCT-II变换，取前13维
@@ -114,8 +114,8 @@ int compute_mfcc_from_float(const float *input, float *output){
         return -1;
     }
     // 调试：内存与计时
-    print_memory_info();
-    uint32_t start_mfcc_time2 = start_timer();
+    // print_memory_info();
+    // uint32_t start_mfcc_time2 = start_timer();
 
     // 13维MFCC特征提取
     for (int i = 0; i < NUM_FRAMES; i++) {
@@ -125,9 +125,9 @@ int compute_mfcc_from_float(const float *input, float *output){
     }
 
     // 打印内存和时间开销
-    print_memory_info();
-    print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);
-    print_time_cost("总计算mfcc时间开销", start_mfcc_time1);
+    // print_memory_info();
+    // print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);  // 10.851 ms
+    // print_time_cost("总计算mfcc时间开销", start_mfcc_time1);   // 98.994 ms
 
 
     return num_frames;
@@ -199,8 +199,8 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
 
     // 调试内存使用情况和时间
     // #ifdef DEBUG_FEATURES  只判断是不是定义了，不管值, 调试宏为0，这里默认是0， 不会报错
-    print_memory_info();
-    uint32_t start_time = start_timer();
+    // print_memory_info();
+    // uint32_t start_time = start_timer();
 
     // 1.PCM 数据转浮点数  避免异常数据，虽然int16_t 数据范围 [-32768, 32767]，但可能存在异常数据
     for (int i = 0; i < INPUT_SAMPLES; i++) {
@@ -248,8 +248,8 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
     }
 
     // 打印内存和时间开销
-    print_memory_info();
-    print_time_cost("compute_logmel_200ms", start_time);
+    // print_memory_info();
+    // print_time_cost("compute_logmel_200ms", start_time);
 
     return NUM_FRAMES;
 
@@ -270,8 +270,8 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
 int compute_mfcc_200ms(const int16_t *input, float *output){
     
     // 调试：内存与计时
-    print_memory_info();
-    uint32_t start_mfcc_time1 = start_timer();
+    // print_memory_info();
+    // uint32_t start_mfcc_time1 = start_timer();
 
 
     // 对得到的logmel特征做一次DCT-II变换，取前13维
@@ -283,8 +283,8 @@ int compute_mfcc_200ms(const int16_t *input, float *output){
         return -1;
     }
     // 调试：内存与计时
-    print_memory_info();
-    uint32_t start_mfcc_time2 = start_timer();
+    // print_memory_info();
+    // uint32_t start_mfcc_time2 = start_timer();
 
     // 13维MFCC特征提取
     for (int i = 0; i < NUM_FRAMES; i++) {
@@ -294,9 +294,9 @@ int compute_mfcc_200ms(const int16_t *input, float *output){
     }
 
     // 打印内存和时间开销
-    print_memory_info();
-    print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);
-    print_time_cost("总计算mfcc时间开销", start_mfcc_time1);
+    // print_memory_info();
+    // print_time_cost("单独计算mfcc时间开销", start_mfcc_time2);
+    // print_time_cost("总计算mfcc时间开销", start_mfcc_time1);
 
 
     return num_frames;

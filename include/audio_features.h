@@ -54,7 +54,7 @@ extern "C" {
 
 // 调试功能开关
 #ifndef DEBUG_FEATURES
-#define DEBUG_FEATURES 1
+#define DEBUG_FEATURES 0
 #endif
 
 

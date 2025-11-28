@@ -11,14 +11,13 @@
 
 
 // ===== MFCC 模型全局对象 =====
-static tflite::MicroErrorReporter mfcc_error_reporter;
-static uint8_t mfcc_arena[8 * 1024] __attribute__((aligned(16)));
-
-static tflite::AllOpsResolver mfcc_resolver;
-static const tflite::Model* mfcc_model = nullptr;
-static tflite::MicroInterpreter* mfcc_interpreter = nullptr;
-static TfLiteTensor* mfcc_input_tensor = nullptr;
-static TfLiteTensor* mfcc_output_tensor = nullptr;
+static tflite::MicroErrorReporter mfcc_error_reporter;    // TinyML Micro 版本的错误报告器，用于打印模型推理错误 
+static uint8_t mfcc_arena[8 * 1024] __attribute__((aligned(16)));  // 模型运行时需要的工作内存（tensor buffer），Micro 端必须自己分配连续内存
+static tflite::AllOpsResolver mfcc_resolver;                  // 包含模型中需要的算子（Conv, FullyConnected 等），让 interpreter 知道怎么执行
+static const tflite::Model* mfcc_model = nullptr;           // 指向需要加载的 FlatBuffer 模型
+static tflite::MicroInterpreter* mfcc_interpreter = nullptr;    // 推理解释器对象，用于执行模型
+static TfLiteTensor* mfcc_input_tensor = nullptr;   // 输入张量指针（方便直接 memcpy 特征进去）
+static TfLiteTensor* mfcc_output_tensor = nullptr;    // 输出张量指针（方便直接读取推理结果）
 
 
 
@@ -79,7 +78,7 @@ float mfcc_model_infer(const float* input_float) {
     // -----------------------------------------
     // 3. 推理 // 核心函数：将输入传入模型进行前向计算，结果放到输出张量
     // -----------------------------------------
-    mfcc_interpreter->Invoke();
+    mfcc_interpreter->Invoke();    //  所以初始化加上static不然报空指针
 
     // -----------------------------------------
     // 4. 获取输出并反量化 (int8 -> float)
@@ -99,6 +98,6 @@ int logmel_model_init() {
   return 0;
 }
 
-int logmel_model_predict(const float* features, float* probability) {
+int logmel_model_infer(const float* features, float* probability) {
   return 0;
 }

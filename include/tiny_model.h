@@ -35,7 +35,7 @@ TODO:logmel模型还未完成， 先直接return
     input: 输入logmel特征  [18 * 64] 输入归一化和量化为int8_t逻辑也包含在里面
     output: 输出
 */
-int logmel_model_predict(const float* features, float* probability);
+int logmel_model_infer(const float* features, float* probability);
 
 
 #ifdef __cplusplus
