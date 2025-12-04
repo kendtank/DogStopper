@@ -41,7 +41,7 @@ static BarkEvent bark_evt;
 
 
 
-// ==================== 生产者任务 ====================
+// ==================== 音频生产者任务 ====================
 void AudioProducerTask(void* param)
 {
     QueueHandle_t q = (QueueHandle_t)param;
@@ -63,7 +63,7 @@ void AudioProducerTask(void* param)
 }
 
 
-// ==================== 消费者任务 ====================
+// ==================== 音频消费者任务(tinyml生产者) ====================
 void AudioConsumerTask(void* param)
 {
     QueueHandle_t q = (QueueHandle_t)param;   // 这里是拿到audio_queue队列句柄
@@ -92,7 +92,7 @@ void AudioConsumerTask(void* param)
 }
 
 
-// ==================== TinyML 消费者, 这里只做打印 ====================
+// ==================== TinyML 消费者（bark_event消费者） ====================
 void TinyMLConsumerTask(void* param)
 {
     QueueHandle_t q = (QueueHandle_t)param;   // 这里是拿到tinyml_queue队列句柄
@@ -188,14 +188,14 @@ void setup()
     // PSRAM创建tinyml队列
 
     // ===== tinyml_queue ===== 每个事件在 PSRAM =====
-    tinyml_queue_storage = (TinyMLEvent*)heap_caps_malloc(QUEUE_DEPTH * sizeof(TinyMLEvent), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    tinyml_queue_storage = (TinyMLEvent*)heap_caps_malloc(TINYML_QUEUE_DEPTH * sizeof(TinyMLEvent), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!tinyml_queue_storage) {
         Serial.println("PSRAM malloc failed for tinyml_queue_storage");
         while (1) vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
     tinyml_mfcc_queue = xQueueCreateStatic(
-    QUEUE_DEPTH,
+    TINYML_QUEUE_DEPTH,
     sizeof(TinyMLEvent),
     (uint8_t*)tinyml_queue_storage,
     &tinyml_queue_buffer
@@ -230,13 +230,14 @@ void setup()
 
     // ===== 启动任务 优先消费者，再生产者 =====
 
-    xTaskCreatePinnedToCore(BarkEventConsumerTask, "BarkDetector", 8192, (void*)bark_queue, 7, NULL, 1);
+    xTaskCreatePinnedToCore(BarkEventConsumerTask, "BarkDetector", 8192, (void*)bark_queue, 7, NULL, 0);
 
     xTaskCreatePinnedToCore(TinyMLConsumerTask, "TinyMLConsumer", 8192, (void*)tinyml_mfcc_queue, 8, NULL, 1);
 
     xTaskCreatePinnedToCore(AudioConsumerTask, "VADConsumer", 8192, (void*)audio_queue, 9, NULL, 1);
 
     xTaskCreatePinnedToCore(AudioProducerTask, "AudioProducer", 8192, (void*)audio_queue, 10, NULL, 0);
+
 
 
     // 创建监控任务

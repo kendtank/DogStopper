@@ -70,7 +70,7 @@ static void assemble_and_push_event(VADContext *ctx) {
 
     // ram->ram
     memcpy(ev->samples, ctx->event_buf, len * sizeof(int16_t));
-    ev->length = len;
+    ev->samples_length = len;
     ev->timestamp_ms = millis();
 
     // 准备push到队列
@@ -92,7 +92,7 @@ static void assemble_and_push_event(VADContext *ctx) {
             ESP_LOGE(TAG, "tinyml_queue still full after discard!"); // 再次发送失败，打印错误
         }
         // xQueueOverwrite(ctx->tinyml_queue, ev);
-        ESP_LOGW(TAG, "tinyml_queue full -> overwrite newest event (len=%d)", ev->length);
+        ESP_LOGW(TAG, "tinyml_queue full -> overwrite newest event (len=%d)", ev->samples_length);
     }
 
     // 清除状态机

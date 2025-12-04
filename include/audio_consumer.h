@@ -102,9 +102,9 @@ extern "C" {
 #define EVENT_END_NOHIT      2   // 连续两次未命中就结束事件  也就是说滑动的6个block 基本上确认无狗吠， 间隔96ms
 
 // tinyML 队列深度（队列指针）
-#define QUEUE_DEPTH          10   // tinyml 队列深度, 设置为 10，即最多10个候选片段， 尽可能牺牲内存换取数据不丢(26*256*int16 * 10) 130kb  （TODO: RAM?PSRAM?）
+#define TINYML_QUEUE_DEPTH          10   // tinyml 队列深度, 设置为 10，即最多10个候选片段， 尽可能牺牲内存换取数据不丢(32*256*int16 * 10) 160kb  （PSRAM）后续可以调节
 
-// 默认判定阈值（运行时调整）
+// 默认判定阈值（可以调整）
 #define DEFAULT_ENERGY_THRESHOLD  150000.0f
 #define DEFAULT_ZCR_THRESHOLD     260.0f
 #define DEFAULT_EMA_ALPHA          0.8f
@@ -114,7 +114,7 @@ extern "C" {
 // 事件以结构体完整拷贝到队列中（取消使用指针，无 malloc， 使用FreeRTOS中的队列）
 typedef struct {
     int16_t samples[EVENT_OUTPUT_MAX_SAMPLES]; // PCM 数据 (整合 pre+event+post)
-    int length;                         // 实际有效样本数
+    int samples_length;                         // 实际有效样本数
     uint32_t timestamp_ms;   // 放入队列的时间，单位 ms
 } TinyMLEvent;
 

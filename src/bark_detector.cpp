@@ -85,10 +85,22 @@ static float tinyml_bark_inference(int16_t* samples, int16_t len) {
 
     if (!samples || !len  || (len != INPUT_SAMPLES)) return 0.0f;
 
+    // 分别打印一下mfcc特征提取的时间开销和模型推理时间开销
+    uint32_t  start_ms = millis();
+
     // 调用audio_feature的提取200msmfcc的函数(包含了数据转换和输出mfcc特征)
     compute_mfcc_200ms(samples, test_output_mfcc);
+
+    uint32_t  mfcc_end_ms = millis();
+
+    // Serial.printf("MFCC特征提取时间: %d ms\n", mfcc_end_ms - start_ms);   // 57 ms
+
     // 推理
     float prob = mfcc_model_infer(test_output_mfcc);
+
+    uint32_t  tinyml_end_ms = millis();
+
+    // Serial.printf("tinyml模型推理时间: %d ms\n", tinyml_end_ms - mfcc_end_ms);   // 15 ms
 
     // 增益补偿
     prob += GAIN_THRESHOLD;
@@ -130,7 +142,7 @@ void bark_detector_process_event(TinyMLEvent* event) {
     if (!event || !g_bark_queue) return;
 
     int16_t* pcm = event->samples;
-    int total_len = event->length;
+    int total_len = event->samples_length;
     uint32_t ts = event->timestamp_ms;
 
     // ------- 1. 小于150ms：丢弃 -------
@@ -141,7 +153,7 @@ void bark_detector_process_event(TinyMLEvent* event) {
 
 
     // ------- 2. 150~200ms：平均填充到200ms -------
-    else if (total_len < BARK_WIN_LEN) 
+    else if (total_len < BARK_WIN_LEN)
     {
         int pad_len = BARK_WIN_LEN - total_len;
         int pad_left = pad_len / 2;
@@ -188,7 +200,7 @@ void bark_detector_process_event(TinyMLEvent* event) {
             else {
                 memcpy(g_window, pcm + start, BARK_WIN_LEN * sizeof(int16_t));
             }
-
+            // 推理
             float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
             Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 

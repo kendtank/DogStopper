@@ -1,6 +1,6 @@
 /*
 ================================================================================
-DMA生产者模块 (audio_input.cpp)
+DMA音频生产者模块 (audio_input.cpp)
 
 作者：Kend
 
@@ -150,7 +150,7 @@ static inline int16_t clamp_int16_from_int64(int64_t v) {
 #if USE_FIXED_POINT
 // Q15定点DC滤波
 static inline HOT_ATTR int16_t remove_dc_q15(DCFilter* f, int16_t x) {
-    if (!f->enabled) return x;
+    if (!f->enabled) return x;   // 滤波器未启用， 直接返回原始样本
     int64_t diff = (int64_t)x - (int64_t)f->x_prev;
     int64_t left = diff * 32768LL;
     int64_t mul = ((int64_t)f->a_q15 * f->y_prev_q15) >> 15;

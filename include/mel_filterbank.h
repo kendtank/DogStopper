@@ -13,7 +13,7 @@ extern "C" {
 /// ================================
 /// 配置参数
 /// ================================
-#define MEL_BANDS 64        // Mel 滤波器数量
+#define MEL_BANDS 64        // Mel 滤波器数量   // TODO：后续需要改为40个滤波器数量，加快计算速度
 #define N_FFT 512            // FFT 长度
 #define NUM_BINS (N_FFT/2+1) // 功率谱长度
 

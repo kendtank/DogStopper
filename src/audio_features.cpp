@@ -215,7 +215,7 @@ int compute_logmel_200ms(const int16_t *input, float *output) {
     // 2.对输入帧加汉宁窗，注意：汉宁窗的初始化已经在hann_frame.h中定义调用就会自动初始化
     #if DEBUG_FEATURES
         int num_frames = frames_win(fp_pcm_src, frames_src, INPUT_SAMPLES);
-        Serial.printf("frames_win: %d frames\n", num_frames);
+        // Serial.printf("frames_win: %d frames\n", num_frames);
     #else
         (void)frames_win(fp_pcm_src, frames_src, INPUT_SAMPLES);
     #endif

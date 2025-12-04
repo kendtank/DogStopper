@@ -130,6 +130,6 @@ void fft_power_free(void)
     }
 
     fft_initialized = false;
-    Serial.println("fft_power_free: 已释放资源");
+    // Serial.println("fft_power_free: 已释放资源");
 }
 

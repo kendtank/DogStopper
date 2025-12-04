@@ -14,7 +14,7 @@
 8. 对训练好的模型进行量化，执行 quantize_model_int8.py, 注意: 使用验证集的数据，选取正负样本各200条，进行归一化后的特征量化保存的best_float_model_mfcc.keras模型。权重和输入输出节点都进行了int8量化，得到量化后的模型 quantized_model_mfcc_int8.tflite
 9. 测试量化模型，执行 evaluate_quantized_model.py, 对整个测试集进行测试，得到指标参数，打印指标在控制台查看损失。需要保持在可接受的范围内。注意：测试比较的模型是quantized_model_mfcc_int8.tflite（int8）和float_model_mfcc.tflite(fp32)， 对于int的输入还需要加上量化的参数。详情请查看源码。
 10. 最后进行实际的音频流测试，执行detect_dog_barks_in_wav.py。模拟读取一个比较长的包含狗吠的音频文件，然后进行滑窗+步长预测，采用float32的模型和int8量化的模型进行预测，同时打印推理结果，利于观察模型效果并再次确认量化无误。 保存狗吠切片，观察模型的效果
-11. 模型转换成cc数组，执行 int8_tflite_to_cc.py, 得到mfcc_int8_model.cc两个文件，保存量化模型字节数组，方便mcu端调用。
+11. 模型转换成cc数组，执行 int8_tflite_to_cc.py, 得到mfcc_int8_model.cc这个文件，保存量化模型字节数组，方便mcu端调用。
 12. 讲模型数组cc文件拷贝到mcu端，以及归一化参数和模型量化输入参数以及模型反量化参数。因为在mcu端进行推理，mfcc接口得到的float特征，需要先使用归一化参数进行[-1,1]的归一化，再使用模型的量化参数，量化到[-128,127]， 喂入int8模型， 得到的int8结果再使用反量化参数，反量化到[-1,1]。得到的是标签为1，的概率（模型设计时决定的）
 
 

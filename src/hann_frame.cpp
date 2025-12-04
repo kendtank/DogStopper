@@ -1,6 +1,7 @@
 #include "hann_frame.h"
 #include <math.h>
 #include <string.h>
+#include "esp_dsp.h"
 
 
 // ================== 静态数据 不放在栈中 ==================
