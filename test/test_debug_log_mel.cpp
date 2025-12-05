@@ -52,7 +52,7 @@
 
 //     // step2. 功率谱分帧， 按照每帧调用 Mel 特征计算接口
 //     const int n_fft_bins = 257;      // 一帧功率谱点数 (N_FFT/2+1)
-//     const int n_mel_bins = 64;       // Mel 滤波器数量
+//     const int n_mel_bins = 40;       // Mel 滤波器数量
 //     const int n_frames = 18;         // 假设共有18帧 (4626 / 257 = 18)
 //     float mel_out[64];               // 每帧 MCU 输出的 log-Mel
 //     const int total_mel_values = n_frames * n_mel_bins;
@@ -68,9 +68,10 @@
 //     for (int i = 0; i < n_frames; i++) {
 //         const float* p_frame = power_spectrum + i * n_fft_bins;
 //         float* mel_frame_out = mel_out_all + i * n_mel_bins;
-
+//         u32_t start_time = micros();
 //         // 单帧 Mel 特征计算
 //         apply_log_mel(p_frame, mel_frame_out);
+//         Serial.printf("logmel compute time: %d us\n", micros() - start_time);   // 稀疏之前：1.6ms  稀疏化矩阵之后：0.15ms
 //     }
 //     Serial.printf("-----------log-Mel 特征计算完成----------\n");
 //     Serial.printf("total_mel_values应该是=%d\n", total_mel_values); // 1152

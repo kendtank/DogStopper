@@ -36,7 +36,7 @@
 
 //     // step2. 功率谱分帧， 按照每帧调用 Mel 特征计算接口
 //     const int n_fft_bins = 257;      // 一帧功率谱点数 (N_FFT/2+1)
-//     const int n_mel_bins = 64;       // Mel 滤波器数量
+//     const int n_mel_bins = 40;       // Mel 滤波器数量
 //     const int n_frames = 18;         // 假设共有18帧 (4626 / 257 = 18)
 //     float mel_out[64];               // 每帧 MCU 输出的 log-Mel
 //     const int total_mel_values = n_frames * n_mel_bins;

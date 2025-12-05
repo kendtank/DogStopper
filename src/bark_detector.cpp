@@ -93,14 +93,14 @@ static float tinyml_bark_inference(int16_t* samples, int16_t len) {
 
     uint32_t  mfcc_end_ms = millis();
 
-    // Serial.printf("MFCC特征提取时间: %d ms\n", mfcc_end_ms - start_ms);   // 57 ms
+    Serial.printf("MFCC特征提取时间: %d ms\n", mfcc_end_ms - start_ms);   // 57 ms
 
     // 推理
     float prob = mfcc_model_infer(test_output_mfcc);
 
     uint32_t  tinyml_end_ms = millis();
 
-    // Serial.printf("tinyml模型推理时间: %d ms\n", tinyml_end_ms - mfcc_end_ms);   // 15 ms
+    Serial.printf("tinyml模型推理时间: %d ms\n", tinyml_end_ms - mfcc_end_ms);   // 15 ms
 
     // 增益补偿
     prob += GAIN_THRESHOLD;

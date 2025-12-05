@@ -72,7 +72,7 @@
 
 // void test_frame_windowed(void)
 // {
-
+    
 //     Serial.println(".......开始测试全量窗后信号......");
 //     int num = (TEST_SIGNAL_LENGTH - FRAME_SIZE) / FRAME_SHIFT + 1;
 //     Serial.print("生成全量窗后信号帧数：");
@@ -81,8 +81,12 @@
 //     float frames_windowed_all_c[num * FRAME_SIZE];  // 存放全量窗后信号
 //     const float *frame_src = test_input_signal; // 拿到3200点输入数据的第一帧起点
 
+    
 //     // 调用封装的hann_frame方法
 //     int num_frames = frames_win(frame_src, frames_windowed_all_c, TEST_SIGNAL_LENGTH);
+    
+
+
 //     Serial.print("C端生成窗后信号帧数：");
 //     Serial.println(num_frames);
 
@@ -109,7 +113,7 @@
 //     for (int i = total_len - 10; i < total_len; i++) {
 //         Serial.println(frame_windowed_all[i], 8);
 //     }
-//     int total_len = num_frames * FRAME_SIZE;
+//     // int total_len = num_frames * FRAME_SIZE;
 
 //     // 一次性与 Python 导出的窗后数组（已转置保存）进行对比
 //     float diff = max_abs_diff(frames_windowed_all_c, frame_windowed_all, total_len);
@@ -132,7 +136,7 @@
 
 // int runUnityTests(void) {
 //     UNITY_BEGIN();
-//     RUN_TEST(test_frame0_windowed);
+//     // RUN_TEST(test_frame0_windowed);
 //     RUN_TEST(test_frame_windowed);
 //     return UNITY_END();
 // }

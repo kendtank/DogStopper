@@ -13,9 +13,15 @@ extern "C" {
 /// ================================
 /// 配置参数
 /// ================================
-#define MEL_BANDS 64        // Mel 滤波器数量   // TODO：后续需要改为40个滤波器数量，加快计算速度
+// #define MEL_BANDS 64        // Mel 滤波器数量   // TODO：后续需要改为40个滤波器数量，加快计算速度
+#define MEL_BANDS 40 
 #define N_FFT 512            // FFT 长度
 #define NUM_BINS (N_FFT/2+1) // 功率谱长度
+#define TOP_K 16             // 取前K大特征值, 稀疏化处理
+
+
+extern const float sparse_filters[MEL_BANDS * TOP_K];
+extern const int16_t sparse_indices[MEL_BANDS * TOP_K];
 
 
 /// ================================

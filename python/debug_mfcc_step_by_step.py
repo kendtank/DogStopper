@@ -2,6 +2,9 @@
 """
 逐步调试MFCC特征提取过程（Python→MCU一致性验证）
 每一阶段都保存为C头文件，便于在MCU端对比。
+
+更新记录：
+1204， mel滤波器系数改为40个滤波器，DCT矩阵也相应修改为40个输入。
 """
 
 import os, re
@@ -17,8 +20,8 @@ from scipy.fftpack import fft
 sr = 16000
 n_fft = 400
 hop = 160
-n_mels = 64  # mel滤波器个数
-n_mfcc = 40
+n_mels = 40  # mel滤波器个数
+n_mfcc = 13  # mfcc系数个数
 fmin = 0.0
 fmax = sr/2.0 -1
 
@@ -137,7 +140,7 @@ Energy ratio (spec/input): 0.99999994
 # # # ============================
 # # # Step 5. Mel滤波器
 # # # ============================
-M_py = librosa.filters.mel(sr=sr, n_fft=512, n_mels=64,
+M_py = librosa.filters.mel(sr=sr, n_fft=512, n_mels=40,
                            fmin=fmin, fmax=8000, htk=False, norm="slaney").astype(np.float32)
 print(f"Mel滤波器读取成功: shape={M_py.shape}, dtype={M_py.dtype}")
 # 打印前16个滤波器系数
@@ -217,7 +220,7 @@ save_to_header(Sdb_py.T.flatten(), "frame_mel_db", "out/frame_mel_db.h")
 
 # 手动实现的 DCT和mfcc特征提取
 
-def get_dct_matrix(MEL_BANDS=64, MFCC_COEFFS=13):
+def get_dct_matrix(MEL_BANDS=40, MFCC_COEFFS=13):
     dct_matrix = np.zeros((MFCC_COEFFS, MEL_BANDS), dtype=np.float32)
     for k in range(MFCC_COEFFS):
         for n in range(MEL_BANDS):
@@ -237,12 +240,12 @@ print("DCT矩阵[1, 0]值:", dct_matrix[1, 0])  # 应该是 cos(π * 1 * (0 + 0.
 save_to_header(dct_matrix.flatten(), "dct_matrix", "out/dct_matrix.h")  # 保存是否需要转置。 按 行优先（C-order） 展开
 
 
-logmel_in = np.ones(64)
+logmel_in = np.ones(40)
 mfcc_py = np.dot(dct_matrix, logmel_in)
 print("Python MFCC 0:", mfcc_py)  # 应为 [8.0, 0, 0, ...]  # Python MFCC 0: [8. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
 
 
-mfcc_dct = np.dot(dct_matrix, Sdb_py)  # (13, 64) @ (64, T) → (13, T)
+mfcc_dct = np.dot(dct_matrix, Sdb_py)  # (13, 40) @ (40, T) → (13, T)
 
 # 使用 scipy.fftpack.dct实现DCT
 mfcc_scipy = dct(Sdb_py, axis=0, type=2, norm='ortho')[:13].astype(np.float32)

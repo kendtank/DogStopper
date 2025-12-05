@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define MEL_BANDS 64      // 输入 log-mel 特征维度
+#define MEL_BANDS 40      // 输入 log-mel 特征维度
 #define MFCC_COEFFS 13    // 输出 MFCC 特征维度
 
 #ifdef __cplusplus

@@ -74,12 +74,16 @@
 //     }
 //     // 使用相同的测试数据
     
+//     u32_t start_time = micros();
 //     // 调用 FFT + 功率谱计算函数
 //     int ret = fft_power_compute(frames_windowed_c,   // 输入窗后帧信号（PSRAM）
 //                             num_frames,          // 一共多少帧
 //                             FRAME_SIZE,          // 每帧点数
 //                             nfft,                // FFT长度（初始化时相同）
 //                             power_out);          // 输出功率谱（PSRAM）
+//     Serial.print("FFT cost time: ");
+//     Serial.print(micros() - start_time);
+//     Serial.println("us");
 
 //     if (ret != 0) {
 //     Serial.printf("fft_power_compute failed, ret=%d\n", ret);

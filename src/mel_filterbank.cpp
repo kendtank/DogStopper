@@ -1,6 +1,10 @@
 #include "mel_filterbank.h"
 #include <math.h>
 #include "esp_dsp.h"
+#include "sparse_filters.h"
+#include "sparse_indices.h"
+
+// TODO: 稀疏 Mel 滤波 — 每个三角形滤波器只有中间一段非零，点积长度通常远小于 NUM_BINS（比如 30–80），把 257 -> ~50，整体加速 4–6×, 把矩阵改为稀疏存储格式， 可以加速计算
 
 /// ================================
 /// Mel滤波器数组定义
@@ -12,6 +16,7 @@ const static float mel_filterbank[MEL_BANDS * NUM_BINS]
     __attribute__((section(".psram"))) = {
     #include "mel_filterbank_data.h"   // 这里是Python生成的纯数据内容文件
 };
+
 
 
 
@@ -43,46 +48,94 @@ const static float mel_filterbank[MEL_BANDS * NUM_BINS]
 // }
 
 
+// void apply_log_mel(const float* power_spectrum, float* logmel_out) {
+//     // 把一帧的功率谱 → 通过 Mel 滤波器组 → 得到 64个 Mel 能量
+//     const float amin = 1e-8f;     // 防止 log(0)
+//     const float top_db = 100.0f;  // 限制动态范围
+//     const float log10_const = 0.43429448f; // log10(x) = log(x) * 0.43429
+//     float max_db = -INFINITY;
+
+//     // 遍历每一个 mel 滤波器  循环 40次
+//     for (int i = 0; i < MEL_BANDS; i++) {
+//         float sum = 0.0f;
+
+//         // 计算 mel 滤波加权能量
+//         // for (int j = 0; j < NUM_BINS; j++) {
+//         //     sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
+//         // }
+
+//         // 注意：矩阵–向量乘法， MCU 上没矩阵乘库，只能拆成 64 次 dot， 可以理解为每一个滤波器都和功率点做一次点积， 只是需要取前64个点进行点积。 语义有点反人类
+//         dsps_dotprod_f32_aes3(&mel_filterbank[i * NUM_BINS], power_spectrum, &sum, NUM_BINS);   // 使用点积加速计算   提速5ms
+
+
+//         // 加上安全下限，防止 log(0)
+//         if (sum < amin) sum = amin;
+
+//         // 转 dB
+//         float db = 10.0f * logf(sum) * log10_const;
+//         logmel_out[i] = db;
+
+//         // 同时更新最大值
+//         if (db > max_db) max_db = db;
+//     }
+
+//     // 应用 top_db 限制和 -80 对齐
+//     float min_db = max_db - top_db;
+//     for (int i = 0; i < MEL_BANDS; i++) {
+//         float db = logmel_out[i];
+//         if (db < min_db) db = min_db;
+//         if (db < -79.9f) db = -80.0f;
+//         logmel_out[i] = db;
+//     }
+// }
+
+
 void apply_log_mel(const float* power_spectrum, float* logmel_out) {
-    // 把一帧的功率谱 → 通过 Mel 滤波器组 → 得到 64个 Mel 能量
-    const float amin = 1e-8f;     // 防止 log(0)
-    const float top_db = 100.0f;  // 限制动态范围
-    const float log10_const = 0.43429448f; // log10(x) = log(x) * 0.43429
+    const float amin = 1e-8f;
     float max_db = -INFINITY;
 
-    // 遍历每一个 mel 滤波器  循环 64次
     for (int i = 0; i < MEL_BANDS; i++) {
         float sum = 0.0f;
+        for (int k = 0; k < TOP_K; k++) {
+            int idx = sparse_indices[i * TOP_K + k];
+            sum += sparse_filters[i * TOP_K + k] * power_spectrum[idx];
+        }
 
-        // 计算 mel 滤波加权能量
-        // for (int j = 0; j < NUM_BINS; j++) {
-        //     sum += mel_filterbank[i * NUM_BINS + j] * power_spectrum[j];
-        // }
-
-        // 注意：矩阵–向量乘法， MCU 上没矩阵乘库，只能拆成 64 次 dot， 可以理解为每一个滤波器都和功率点做一次点积， 只是需要取前64个点进行点积。 语义有点反人类
-        dsps_dotprod_f32_aes3(&mel_filterbank[i * NUM_BINS], power_spectrum, &sum, NUM_BINS);   // 使用点积加速计算   提速5ms
-
-
-        // 加上安全下限，防止 log(0)
         if (sum < amin) sum = amin;
-
-        // 转 dB
-        float db = 10.0f * logf(sum) * log10_const;
+        float db = 10.0f * logf(sum) * 0.43429448f;
         logmel_out[i] = db;
-
-        // 同时更新最大值
         if (db > max_db) max_db = db;
     }
 
-    // 应用 top_db 限制和 -80 对齐
-    float min_db = max_db - top_db;
+    float min_db = max_db - 100.0f;
     for (int i = 0; i < MEL_BANDS; i++) {
-        float db = logmel_out[i];
-        if (db < min_db) db = min_db;
-        if (db < -79.9f) db = -80.0f;
-        logmel_out[i] = db;
+        if (logmel_out[i] < min_db) logmel_out[i] = min_db;
+        if (logmel_out[i] < -79.9f) logmel_out[i] = -80.0f;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
