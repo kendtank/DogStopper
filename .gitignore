@@ -1,6 +1,8 @@
 .pio/
 .vscode/
 __pycache__/
+components/
+.build/
 .idea/
 .data/
 *.npy
@@ -10,5 +12,9 @@ __pycache__/
 *.tflite
 *.txt
 *.mp3
+save_model/
+python/verify/train/compare_dog/
 python/tinyml/test_int8_model_by_wav/detected_barks_float/
 python/tinyml/test_int8_model_by_wav/detected_barks_int8/
+python/verify/train/dog_bark_embed32_export/
+python/verify/train/dog_ge2e_ckpt/

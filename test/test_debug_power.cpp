@@ -80,6 +80,7 @@
 //                             num_frames,          // 一共多少帧
 //                             FRAME_SIZE,          // 每帧点数
 //                             nfft,                // FFT长度（初始化时相同）
+//                             0,                   // logmel用
 //                             power_out);          // 输出功率谱（PSRAM）
 //     Serial.print("FFT cost time: ");
 //     Serial.print(micros() - start_time);

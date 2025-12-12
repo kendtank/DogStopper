@@ -6,7 +6,7 @@
 
 
 // ================== 静态数据 不放在栈中 ==================
-static float hann_win[FRAME_SIZE];
+static float hann_win[FRAME_SIZE];   // 只读汉宁窗权重
 static int hann_initialized = 0;
 
 

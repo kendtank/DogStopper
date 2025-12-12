@@ -113,7 +113,7 @@ def read_audio_files():
         # 保存为头文件，放在mcu中测试
         save_to_header(wave_int16, name, f"{name}.h", dtype='int16')
 
-def get_dct_matrix(MEL_BANDS=64, MFCC_COEFFS=13):
+def get_dct_matrix(MEL_BANDS=40, MFCC_COEFFS=13):
     dct_matrix = np.zeros((MFCC_COEFFS, MEL_BANDS), dtype=np.float32)
     for k in range(MFCC_COEFFS):
         for n in range(MEL_BANDS):
@@ -134,7 +134,7 @@ def libsoras_mfcc(wave):
         win_length=400,
         window='hann',
         center=False,   # 关闭自动 padding
-        n_mels=64,
+        n_mels=40,
         fmin=0,
         fmax=8000,
         n_mfcc=13,
@@ -157,7 +157,7 @@ def compute_mfcc(wave):
     powspec = np.abs(X[:num_bins, :]) ** 2  # Power Spectrum
     # print(f"powspec shape: {powspec.shape}")
     powspec = powspec.astype(np.float32)
-    M_py = librosa.filters.mel(sr=sr, n_fft=512, n_mels=64,
+    M_py = librosa.filters.mel(sr=sr, n_fft=512, n_mels=40,
                                fmin=fmin, fmax=fmax, htk=False, norm="slaney").astype(np.float32)
     # print(f"Mel滤波器读取成功: shape={M_py.shape}")
     # 计算mel

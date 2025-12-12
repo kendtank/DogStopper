@@ -17,9 +17,9 @@ extern "C" {
 #define MEL_BANDS 40 
 #define N_FFT 512            // FFT 长度
 #define NUM_BINS (N_FFT/2+1) // 功率谱长度
-#define TOP_K 16             // 取前K大特征值, 稀疏化处理
+#define TOP_K 32             // 取前K大特征值, 稀疏化处理  之前测试16， 现在改为32， 提高精度，因为mfcc测试误差在5%， 目前千分之1
 
-
+// 稀疏矩阵
 extern const float sparse_filters[MEL_BANDS * TOP_K];
 extern const int16_t sparse_indices[MEL_BANDS * TOP_K];
 

@@ -23,10 +23,15 @@
     *    - 使用 ESP-DSP 库加速 FFT
     *    - 所有大数组建议放置在 PSRAM
     *    - 针对不同的特征提取需求，设计独立函数，低耦合高内聚
-    * # TODO: 待测试封装后的功能一致性与py新封装的函数
-    * # TODO：功率计算， 性能还可以使用 DSP库的dsps_bit_rev_lookup_fc32进行更高性能的计算
-    * # TODO: 滤波的计算未使用DSP库的点积加速
-*/
+    * # TODO: 待测试封装后的功能一致性与py新封装的函数   - 完成
+    * # TODO：功率计算， 性能还可以使用 DSP库的dsps_bit_rev_lookup_fc32进行更高性能的计算  - 已完成
+    * # TODO: 滤波的计算未使用DSP库的点积加速  - 完成
+    * 
+    * 更新：
+    *   2024-12-12: 
+    *       由于需要新增声纹验证模型，可能会出现logmel函数被多处同时调用的情况， 所以将中间缓存buffer多定义一份， 避免多个函数之间冲突， 但是内部函数实现还是保持传地址的方式
+    *       init_feature_buffers中需要对logmel计算和mfcc计算的中间缓存都进行分配， 避免对全局数组进行复用冲突
+    */
 
 
 #ifndef AUDIO_FEATURES_H
@@ -46,16 +51,13 @@ extern "C" {
 #define FRAME_LENGTH    400       // 分帧窗口长度25ms
 #define FRAME_SHIFT     160       // 步长10ms
 #define N_FFT           512       // FFT 窗口长度 (必须是2的幂次方，且 >= FRAME_LENGTH)
-#define N_MEL_BINS      64        // Mel 滤波器数量
+#define N_MEL_BINS      40        // Mel 滤波器数量
 #define NUM_FRAMES      18        // 输出帧数（3200点音频被分了多少帧）
 #define N_MFCC          13         // MFCC系数数量 与 Python 训练时一致（根据资源情况来调整）
 
-
-
 // 调试功能开关
-#ifndef DEBUG_FEATURES
-#define DEBUG_FEATURES 0
-#endif
+// #define DEBUG_FEATURES 0
+
 
 
 // -------------------- 状态/结果尺寸 测试用--------------------
@@ -81,20 +83,10 @@ void free_feature_buffers();
  *
  * @param input: 输入音频数据（16kHz采样率，3200个采样点） 麦克风 / ADC 输出	int16_t	原始PCM
  * @param output: 输出Log-Mel特征矩阵
+ * @param logmel_flag: 0表示MFCC使用的LogMel计算， 1表示单独LogMel计算
  * @return 成功返回帧数，失败返回负数
  */
-int compute_logmel_200ms(const int16_t *input, float *output);
-
-
-
-#if DEBUG_FEATURES
-// 测试使用float输入  测试算法的准确度
-int compute_logmel_from_float(const float *input_normalized, float *output);
-
-int compute_mfcc_from_float(const float *input_normalized, float *output);
-
-#endif
-
+int compute_logmel_200ms(const int16_t *input, float *output, int logmel_flag);
 
 
 
@@ -108,8 +100,6 @@ int compute_mfcc_from_float(const float *input_normalized, float *output);
  * @return 成功返回帧数，失败返回负数
  */
 int compute_mfcc_200ms(const int16_t *input, float *output);
-
-
 
 
 #ifdef __cplusplus

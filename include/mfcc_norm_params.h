@@ -24,17 +24,19 @@ extern "C" {
 #define NORM_TARGET_MIN (-1.0f)
 #define NORM_TARGET_MAX (1.0f)
 
-// -------------------------
-// MFCC 输入量化参数（float -> int8）
-// -------------------------
-#define MFCC_INPUT_SCALE  (0.00784314f)
-#define MFCC_INPUT_ZERO_POINT  (-1)
+// 使用tflm获取参数
 
-// -------------------------
-// MFCC 输出量化参数（int8 -> float）
-// -------------------------
-#define MFCC_OUTPUT_SCALE (0.00390625f)
-#define MFCC_OUTPUT_ZERO_POINT (-128)
+// // -------------------------
+// // MFCC 输入量化参数（float -> int8）
+// // -------------------------
+// #define MFCC_INPUT_SCALE  (0.00784314f)
+// #define MFCC_INPUT_ZERO_POINT  (-1)
+
+// // -------------------------
+// // MFCC 输出量化参数（int8 -> float）
+// // -------------------------
+// #define MFCC_OUTPUT_SCALE (0.00390625f)
+// #define MFCC_OUTPUT_ZERO_POINT (-128)
 
 #ifdef __cplusplus
 }

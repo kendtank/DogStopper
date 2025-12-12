@@ -1,6 +1,9 @@
+
+#include <math.h>
 #include "tiny_model.h"
 #include "mfcc_model_data.h"  // 模型 FlatBuffer C 数组  python端量化生成
-#include "mfcc_quant_params.h"  // 模型量化参数
+#include "mfcc_norm_params.h"  // 模型归一化参数
+#include "embed_model_data.h"
 
 // 引入tflite micro库
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -18,6 +21,24 @@ static const tflite::Model* mfcc_model = nullptr;           // 指向需要加�
 static tflite::MicroInterpreter* mfcc_interpreter = nullptr;    // 推理解释器对象，用于执行模型
 static TfLiteTensor* mfcc_input_tensor = nullptr;   // 输入张量指针（方便直接 memcpy 特征进去）
 static TfLiteTensor* mfcc_output_tensor = nullptr;    // 输出张量指针（方便直接读取推理结果）
+static float mfcc_in_scale = 0.0f;    // 输入量化 scale
+static int mfcc_in_zero    = 0;      // 输入量化 zero_point
+static float mfcc_out_scale = 0.0f;   // 输出反量化 scale
+static int mfcc_out_zero    = 0;      // 输出反量化 zero_point
+
+
+// ===== embed 模型全局对象 =====
+static tflite::MicroErrorReporter embed_error_reporter;    // TinyML Micro 版本的错误报告器，用于打印模型推理错误 
+static uint8_t embed_arena[16 * 1024] __attribute__((aligned(16)));  // 模型运行时需要的工作内存（tensor buffer），Micro 端必须自己分配连续内存
+static tflite::AllOpsResolver embed_resolver;                  // 包含模型中需要的算子（Conv, FullyConnected 等），让 interpreter 知道怎么执行
+static const tflite::Model* embed_model = nullptr;           // 指向需要加载的 FlatBuffer 模型
+static tflite::MicroInterpreter* embed_interpreter = nullptr;    // 推理解释器对象，用于执行模型
+static TfLiteTensor* embed_input_tensor = nullptr;   // 输入张量指针（方便直接 memcpy 特征进去）
+static TfLiteTensor* embed_output_tensor = nullptr;    // 输出张量指针（方便直接读取推理结果）
+static float embed_in_scale = 0.0f;    // 输入量化 scale
+static int embed_in_zero    = 0;      // 输入量化 zero_point
+static float embed_out_scale = 0.0f;   // 输出反量化 scale
+static int embed_out_zero    = 0;      // 输出反量化 zero_point
 
 
 
@@ -37,6 +58,12 @@ int mfcc_model_init() {
 
     mfcc_input_tensor  = mfcc_interpreter->input(0);
     mfcc_output_tensor = mfcc_interpreter->output(0);
+
+    // 量化参数可以直接从模型输入张量获取
+    mfcc_in_scale = mfcc_input_tensor->params.scale;
+    mfcc_in_zero    = mfcc_input_tensor->params.zero_point;
+    mfcc_out_scale = mfcc_output_tensor->params.scale;
+    mfcc_out_zero    = mfcc_output_tensor->params.zero_point;
 
     return 0;
 }
@@ -64,7 +91,7 @@ float mfcc_model_infer(const float* input_float) {
         if (norm < NORM_TARGET_MIN) norm = NORM_TARGET_MIN;
 
         // 量化到 int8
-        int32_t q = (int32_t)(norm / MFCC_INPUT_SCALE + MFCC_INPUT_ZERO_POINT);
+        int32_t q = (int32_t)(norm / mfcc_in_scale + mfcc_in_zero);
         if (q > 127) q = 127;
         if (q < -128) q = -128;
         input_int8[i] = (int8_t)q;
@@ -86,18 +113,99 @@ float mfcc_model_infer(const float* input_float) {
     // 获取输出张量的 int8 值
     int8_t q_out = mfcc_output_tensor->data.int8[0];
     // 反量化 输出狗吠的概率
-    float prob = (q_out - MFCC_OUTPUT_ZERO_POINT) * MFCC_OUTPUT_SCALE;
+    float prob = (q_out - mfcc_out_zero) * mfcc_out_scale;
 
     return prob;
 
 }
 
 
-// === LogMel模型实现 ===
+// ===== 初始化embed模型 =====
 int logmel_model_init() {
-  return 0;
+    embed_model = tflite::GetModel(embed_model_int8_tflite);
+    if (!embed_model) return -1;
+    if (embed_model->version() != TFLITE_SCHEMA_VERSION) return -2;
+
+    // 用 static 对象避免栈释放
+    static tflite::MicroInterpreter static_interpreter_embed(
+        embed_model, embed_resolver, embed_arena, sizeof(embed_arena), &embed_error_reporter
+    );
+    embed_interpreter = &static_interpreter_embed;
+
+    if (embed_interpreter->AllocateTensors() != kTfLiteOk) return -3;
+
+    embed_input_tensor  = embed_interpreter->input(0);
+    embed_output_tensor = embed_interpreter->output(0);
+    // 量化参数直接从模型输入张量获取
+    embed_in_scale = embed_input_tensor->params.scale;
+    embed_in_zero    = embed_input_tensor->params.zero_point;
+    embed_out_scale = embed_output_tensor->params.scale;
+    embed_out_zero    = embed_output_tensor->params.zero_point;
+
+    return 0;
 }
 
-int logmel_model_infer(const float* features, float* probability) {
-  return 0;
+
+int embed_model_infer(const float* features, float* embedding) {
+    // 默认完成了初始化  注意： 这个模型没有输入特征的归一化，因为训练时没有做归一化处理
+
+    // -----------------------------------------
+    // 1. 输入量化 (float -> int8)
+    // ----------
+    int8_t* in_buf = embed_input_tensor->data.int8;
+
+    // // 获取 int8 元素数量
+    // int input_len = EMBED_INPUT_SIZE;
+
+    for (int i = 0; i < EMBED_INPUT_SIZE; i++) {
+
+        // float → int32（中间值）
+        float x = features[i] / embed_in_scale;
+
+        int q = (x >= 0 ? x + 0.5f : x - 0.5f);  // 等价 roundf(x)
+
+        q += embed_in_zero;
+
+        // clamp 到 int8
+        if (q > 127) q = 127;
+        if (q < -128) q = -128;
+
+        in_buf[i] = (int8_t)q;
+    }
+
+    // === 2. 推理 === //
+    if (embed_interpreter->Invoke() != kTfLiteOk) {
+        return -1;
+    }
+
+    // === 3. 输出反量化 === //
+    int8_t* out_buf = embed_output_tensor->data.int8;
+
+    // int out_len = embed_output_tensor->bytes / sizeof(int8_t);
+
+    for (int i = 0; i < EMBED_OUTPUT_SIZE; i++) {
+        embedding[i] = (out_buf[i] - embed_out_zero) * embed_out_scale;
+    }
+
+    return 0;
+}
+
+
+// 计算两个向量的余弦相似度， 用于验证embedding的相似性
+float cosine_similarity(const float *a, const float *b, int size) {
+    float dot = 0.0f;
+    float norm_a = 0.0f;
+    float norm_b = 0.0f;
+
+    for (int i = 0; i < size; i++) {
+        float ai = a[i];
+        float bi = b[i];
+        dot     += ai * bi;
+        norm_a  += ai * ai;
+        norm_b  += bi * bi;
+    }
+
+    // 避免除零
+    float denom = sqrtf(norm_a) * sqrtf(norm_b) + 1e-8f;
+    return dot / denom;
 }

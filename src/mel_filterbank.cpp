@@ -12,10 +12,10 @@
 /// 放在PSRAM节区，避免占用内部RAM
 /// 验证c和python结果一致性[pass]  1e-5f 误差范围内一致  TODO: 是否需要加static
 /// ================================
-const static float mel_filterbank[MEL_BANDS * NUM_BINS] 
-    __attribute__((section(".psram"))) = {
-    #include "mel_filterbank_data.h"   // 这里是Python生成的纯数据内容文件
-};
+// const static float mel_filterbank[MEL_BANDS * NUM_BINS] 
+//     __attribute__((section(".psram"))) = {
+//     #include "mel_filterbank_data.h"   // 这里是Python生成的纯数据内容文件
+// };
 
 
 

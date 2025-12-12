@@ -7,7 +7,7 @@ M_py = librosa.filters.mel(sr=16000, n_fft=512, n_mels=40,
                            fmin=0, fmax=8000, htk=False, norm="slaney").astype(np.float32)
 print(f"Mel滤波器读取成功: shape={M_py.shape}, dtype={M_py.dtype}")
 
-TOP_K = 16
+TOP_K = 32   # 16 mfcc误差有点大了
 header_dir = "out/"  # 输出头文件路径
 MEL_BANDS, NUM_BINS = M_py.shape
 
