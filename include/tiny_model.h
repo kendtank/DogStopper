@@ -36,8 +36,8 @@ int logmel_model_init();
 int embed_model_infer(const float* features, float* embedding);
 
 
-// 计算两个向量的余弦相似度
-float cosine_similarity(const float *a, const float *b, int size);
+// // 计算两个向量的余弦相似度
+// float cosine_similarity(const float *a, const float *b, int size);
 
 
 #ifdef __cplusplus

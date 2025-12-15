@@ -6,6 +6,7 @@
 #include "audio_input.h"    // 生产者模块
 #include "audio_consumer.h" // VAD 消费端
 #include "bark_detector.h"  // 狗吠检测消费者
+#include "verify_embedding.h"  // 声纹验证消费者
 
 
 // ==================== audio_queue 队列 ====================
@@ -33,10 +34,10 @@ static BarkEvent* bark_queue_storage = nullptr; // xQueueCreateStatic 要求 队
 // VAD 上下文
 static VADContext vad_ctx;
 
-// tinyml接受结构体，用来传递到brak检测模块
+// tinyml接收结构体，用来传递到brak检测模块
 static TinyMLEvent evt;
 
-// bark_event结构体，用于打印狗吠事件
+// bark_event接收结构体
 static BarkEvent bark_evt;
 
 
@@ -132,10 +133,7 @@ void BarkEventConsumerTask(void* param)
     while (true) {
         if (xQueueReceive(q, &bark_evt, portMAX_DELAY) == pdTRUE) {
             // 拿到真实的狗吠事件， 这里只做打印长度和需要的时间， 大概就是延时
-            // 获取现在的时间
-            uint32_t now_ms = millis();
-            // 打印事件的长度和延时
-            Serial.printf("[bark_event] bark_event: %d length, %d ms\n", bark_evt.length, now_ms - bark_evt.timestamp_ms);
+            verify_embedding_process(&bark_evt);
             
         } else {
             Serial.println("[TinyML Consumer] Queue receive FAILED");
@@ -224,6 +222,13 @@ void setup()
     // 初始化 BarkDetector
     bark_detector_init(bark_queue);
 
+
+    // 初始化验证模块
+    verify_embedding_init();
+
+
+
+
     // 等待所有异步操作完成
     delay(500);
 
@@ -253,9 +258,3 @@ void loop()
 {
     // FreeRTOS 已接管，不需要操作
 }
-
-
-/*
-
-
-*/

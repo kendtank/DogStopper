@@ -93,14 +93,14 @@ static float tinyml_bark_inference(int16_t* samples, int16_t len) {
 
     uint32_t  mfcc_end_ms = millis();
 
-    Serial.printf("MFCC特征提取时间: %d ms\n", mfcc_end_ms - start_ms);   // 57 ms
+    // Serial.printf("MFCC特征提取时间: %d ms\n", mfcc_end_ms - start_ms);   // 57 ms  16ms
 
     // 推理
     float prob = mfcc_model_infer(test_output_mfcc);
 
     uint32_t  tinyml_end_ms = millis();
 
-    Serial.printf("tinyml模型推理时间: %d ms\n", tinyml_end_ms - mfcc_end_ms);   // 15 ms
+    // Serial.printf("tinyml模型推理时间: %d ms\n", tinyml_end_ms - mfcc_end_ms);   // 15 ms
 
     // 增益补偿
     prob += GAIN_THRESHOLD;
@@ -165,9 +165,10 @@ void bark_detector_process_event(TinyMLEvent* event) {
 
         float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
         // 打印概率
-        Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
+        // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 
         if (prob >= BARK_HIGH_THRESHOLD) {
+            Serial.printf("push窗狗吠概率为： %.3f\n", prob);
             push_bark_event(g_window, BARK_WIN_LEN, ts);
         }
 
@@ -202,11 +203,12 @@ void bark_detector_process_event(TinyMLEvent* event) {
             }
             // 推理
             float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
-            Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
+            // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 
             // 判断这个窗的概率事件
             if (prob >= BARK_HIGH_THRESHOLD) {
                 // 高概率 → 直接输出
+                Serial.printf("push窗狗吠概率为： %.3f\n", prob);
                 push_bark_event(g_window, BARK_WIN_LEN, ts);
                 g_mid_len = 0; // 清空中概率缓冲
             } 

@@ -191,21 +191,21 @@ int embed_model_infer(const float* features, float* embedding) {
 }
 
 
-// 计算两个向量的余弦相似度， 用于验证embedding的相似性
-float cosine_similarity(const float *a, const float *b, int size) {
-    float dot = 0.0f;
-    float norm_a = 0.0f;
-    float norm_b = 0.0f;
+// // 计算两个向量的余弦相似度， 用于验证embedding的相似性
+// float cosine_similarity(const float *a, const float *b, int size) {
+//     float dot = 0.0f;
+//     float norm_a = 0.0f;
+//     float norm_b = 0.0f;
 
-    for (int i = 0; i < size; i++) {
-        float ai = a[i];
-        float bi = b[i];
-        dot     += ai * bi;
-        norm_a  += ai * ai;
-        norm_b  += bi * bi;
-    }
+//     for (int i = 0; i < size; i++) {
+//         float ai = a[i];
+//         float bi = b[i];
+//         dot     += ai * bi;
+//         norm_a  += ai * ai;
+//         norm_b  += bi * bi;
+//     }
 
-    // 避免除零
-    float denom = sqrtf(norm_a) * sqrtf(norm_b) + 1e-8f;
-    return dot / denom;
-}
+//     // 避免除零
+//     float denom = sqrtf(norm_a) * sqrtf(norm_b) + 1e-8f;
+//     return dot / denom;
+// }
