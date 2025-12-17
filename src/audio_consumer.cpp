@@ -5,6 +5,7 @@
 #include <esp_log.h>
 #include "esp_heap_caps.h"
 #include <Arduino.h>
+#include "system_state.h"
 
 
 static const char* TAG = "VAD_MODULE";
@@ -222,6 +223,9 @@ bool vad_consumer_init(VADContext* ctx, QueueHandle_t tinyml_queue) {
  * 设计流程：滑窗处理的八个步骤（容易思维紊乱， 先确定好流程再写实现函数）
  */
 void vad_consumer_process_block(VADContext* ctx, const int16_t* new_block) {
+
+    
+    if (!g_system_ready) return;
 
     if (!ctx || !new_block) return;
 

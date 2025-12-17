@@ -55,9 +55,9 @@ extern "C" {
 #define BARK_STRIDE       1600    // 滑窗步长（100ms）
 #define BARK_LOW            2400   // 150ms @16kHz 0.15 * 16kHz = 2400
 #define BARK_HIGH_THRESHOLD 0.8f    // 高概率阈值   大于 0.8 的窗直接输出
-#define BARK_LOW_THRESHOLD  0.6f    // 中概率阈值，用于聚合   大于 0.6 的窗加入缓冲区， 低于0.6直接丢弃
-#define GAIN_THRESHOLD      0.2f    // 增益补偿，前期模型训练的效果差， 需补偿，后续可以设置为0， 就是在推理出来的概率加这个值
-#define BARK_QUEUE_DEPTH    50      // bark 事件队列深度    BARK_QUEUE_DEPTH * BarkEvent  大小约 = 20 *  (3200 * 2B) = 128000B = 125KB
+#define BARK_LOW_THRESHOLD  0.65f    // 中概率阈值，用于聚合   大于 0.6 的窗加入缓冲区， 低于0.6直接丢弃
+#define GAIN_THRESHOLD      0.3f    // 增益补偿，前期模型训练的效果差， 需补偿，后续可以设置为0， 就是在推理出来的概率加这个值
+#define BARK_QUEUE_DEPTH    20      // bark 事件队列深度    BARK_QUEUE_DEPTH * BarkEvent  大小约 = 20 *  (3200 * 2B) = 128000B = 125KB
 
 
 // ==========================================

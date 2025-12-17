@@ -39,15 +39,15 @@ extern "C" {
 // 最大 batch 数（20 batch → 200 次后冻结）
 #define MAX_BATCH_NUM         10
 // 相似度阈值（用于核心簇筛选, 保证簇的聚类质量）
-#define EMBED_CORE_SIM_TH       0.4f  // 根据测试调整
+#define EMBED_CORE_SIM_TH       0.5f  // 根据测试调整
 // 至少需要的核心样本数（保证每个batch本身的质量）
 #define EMBED_CORE_TOPK         3
 // 模板更新相似度阈值防止漂移
 #define TEMPLATE_UPDATE_SIM_TH  0.5f
 
 #define EMA_ALPHA_START  0.5f    // 前 1～2 次
-#define EMA_ALPHA_MIN    0.05f   // 后期最小更新率
-#define EMA_DECAY_STEP   0.02f   // 每次 batch 衰减
+#define EMA_ALPHA_MIN    0.1f   // 后期最小更新率
+#define EMA_DECAY_STEP   0.05f   // 每次 batch 衰减
 // #define MAX_BATCH_NUM    20      // 20 次后冻结
 
 
@@ -73,8 +73,7 @@ void learning_core_init(void);
 float learning_core_calc_similarity(const float* embed);
 
 /* 自学习 */
-LearnResult learning_core_try_learn(uint32_t start_index,
-                                    uint32_t batch_size);
+LearnResult learning_core_try_learn(uint32_t batch_size);
 
 
 #ifdef __cplusplus

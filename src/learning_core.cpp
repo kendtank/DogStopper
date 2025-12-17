@@ -8,7 +8,7 @@
 /* ============ 模版结构 需要持久化在Flash中 =======*/
 typedef struct {
     float centroid[EMBED_DIM];
-    int   batch_count;       // 已融合 batch 数
+    int   batch_count;       // 已融合 batch 数  0-9
     bool  frozen;           // 是否冻结，达到上限不再更新
 } TemplateModel;
 
@@ -40,19 +40,20 @@ static float cosine_sim(const float* a, const float* b) {
 // 计算 EMA 衰减率
 static float calc_ema_alpha(int batch_count)
 {
-    float a = EMA_ALPHA_START - batch_count * EMA_DECAY_STEP;
+    float a = EMA_ALPHA_START - batch_count * EMA_DECAY_STEP;  // 0.5- 1-10 *(0.05)
     if (a < EMA_ALPHA_MIN) {
         a = EMA_ALPHA_MIN;
     }
     return a;
 }
 
+
 // 冷启动阈值
 static float calc_dynamic_sim_th(int batch_count)
 {
-    const float SIM_START = 0.4f;
+    const float SIM_START = 0.45f;
     const float SIM_STEP  = 0.05f;
-    const float SIM_MAX   = 0.6f;
+    const float SIM_MAX   = 0.7f;
 
     float th = SIM_START + batch_count * SIM_STEP;
     if (th > SIM_MAX) {
@@ -144,6 +145,17 @@ static bool batch_cluster_core(float embeds[EMBED_BATCH_SIZE][EMBED_DIM],
 }
 
 
+// static bool template_is_valid(const TemplateModel* t)
+// {
+//     if (t->batch_count <= 0) return false;
+
+//     float n = norm(t->centroid);
+//     if (n < 1e-3f) return false;
+
+//     return true;
+// }
+
+
 
 /* ================== 初始化模版 ================== */
 void learning_core_init(void)
@@ -155,6 +167,10 @@ void learning_core_init(void)
     if (flash_storage_load_template(&g_template, sizeof(g_template))) {
         // 加载模版成功。 这里其实不需要设置，因为状态机已经设置了，但是还是可以设置一下以防万一
         flash_state.template_ready = true;
+    }
+    else {
+        flash_state.template_ready = false;
+        memset(&g_template, 0, sizeof(g_template));
     }
 }
 
@@ -176,8 +192,7 @@ float learning_core_calc_similarity(const float* embed)
 
 
 /* ================== 难点： 对外接口 2：自学习接口 ================== */
-LearnResult learning_core_try_learn(uint32_t start_idx,
-                                    uint32_t batch_size)
+LearnResult learning_core_try_learn(uint32_t batch_size)
 {
     if (batch_size != EMBED_BATCH_SIZE) {
         return LEARN_FAIL;
@@ -192,7 +207,7 @@ LearnResult learning_core_try_learn(uint32_t start_idx,
     float embeds[EMBED_BATCH_SIZE][EMBED_DIM];
 
     for (uint32_t i = 0; i < batch_size; i++) {
-        if (!flash_read_embedding(start_idx + i, embeds[i])) {
+        if (!flash_read_embedding(i, embeds[i])) {
             return LEARN_FAIL;
         }
     }
@@ -207,7 +222,7 @@ LearnResult learning_core_try_learn(uint32_t start_idx,
     }
 
     /* ---------- 3. 与全局模版一致性 ---------- */
-    if (flash_state.template_ready) {
+    if (flash_state.template_ready && g_template.batch_count > 0) {
         float sim =
             cosine_sim(batch_centroid,
                        g_template.centroid);
@@ -261,7 +276,8 @@ LearnResult learning_core_try_learn(uint32_t start_idx,
     }
 
     /* ---------- 5. 冻结判断 ---------- */
-    if (g_template.batch_count >= MAX_BATCH_NUM) {
+    if (g_template.batch_count > MAX_BATCH_NUM) {
+        Serial.println("[LEARN] template frozen");
         g_template.frozen = true;
         flash_storage_save_template(&g_template,
                                     sizeof(g_template));

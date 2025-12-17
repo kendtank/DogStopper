@@ -10,6 +10,9 @@
 #include <Arduino.h>
 #include <esp_log.h>
 #include "esp_heap_caps.h"
+#include "led_control.h"
+#include "system_state.h"
+
 
 /*
 本系统将 Flash 中的 embedding 视为不可变的原始观测数据。
@@ -49,7 +52,7 @@ bool verify_embedding_init() {
     learning_core_init();
 
     // 擦除flash的namespace
-    reset_storage();
+    // reset_storage();
 
     return true;
 }
@@ -95,6 +98,7 @@ static const char* learn_result_str(LearnResult r)
 // -------------------- 主处理函数 --------------------
 void verify_embedding_process(BarkEvent *event)
 {
+    if (!g_system_ready) return;
     if (!event) {
         return;
     }
@@ -117,7 +121,7 @@ void verify_embedding_process(BarkEvent *event)
     /* ==================================================
      * 2. 学习期：embedding 落盘（原始事实）
      * ================================================== */
-    if (!flash_state.close_learning || flash_state.total_embed_counter <= 100 ) {
+    if (!flash_state.close_learning) {
         // Serial.println("embedding save to flash");
         if (flash_save_embedding(logmel_mebedding)) {
         flash_state.total_embed_counter++;
@@ -136,9 +140,9 @@ void verify_embedding_process(BarkEvent *event)
         uint32_t start_index = flash_state.total_embed_counter - EMBED_BATCH_SIZE;
         // Serial.printf("开始一次自学习，start_index = %d", start_index);
         // batch内部自学习，自动聚类
-        LearnResult r = learning_core_try_learn(start_index, EMBED_BATCH_SIZE);
+        LearnResult r = learning_core_try_learn(EMBED_BATCH_SIZE);
         // 打印自学习结果，是结构体
-        Serial.printf("learning result = %s (%d)",learn_result_str(r), r);
+        // Serial.printf("learning result = %s (%d)",learn_result_str(r), r);
   
 
         // batch 生命周期结束，无论成功失败都清零
@@ -176,19 +180,21 @@ void verify_embedding_process(BarkEvent *event)
 
     
     float sim = learning_core_calc_similarity(logmel_mebedding);
-    Serial.printf("[verify_embedding] sim = %f\n", sim);
+    // Serial.printf("[verify_embedding] sim = %f\n", sim);
 
     // 如果是等于-2，则说明没有模板，则进行弱惩罚狗狗
     if (sim == -2) {
-        Serial.println("没有模版，进行弱惩罚干预");
+        // Serial.println("没有模版，进行弱惩罚干预");
         // 弱惩罚
+        led_set_state(LED_NO_TEMPLATE, 1000);   // 蓝色led
         return;
     }
-    if (sim > 0.75) {
-        Serial.println("匹配成功模版，进行狗吠惩罚");
+    if (sim > 0.8) {
+        // Serial.println("匹配成功模版，进行狗吠惩罚");
         // 狗吠
+        led_set_state(LED_MATCH, 1000);     // 红色led
         return;
     }
-    Serial.printf("不是模版狗，不干预处理");
-
+    // Serial.printf("不是模版狗，不干预处理");    // 绿色led
+    led_set_state(LED_NO_MATCH, 1000);
 }

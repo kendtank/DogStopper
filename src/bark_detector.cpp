@@ -1,8 +1,3 @@
-/**
- * 
- * 
- */
-
 #include "bark_detector.h"
 #include "tiny_model.h"   // 包含了 mfcc_model_init 和 mfcc_model_infer
 #include "audio_features.h"  // 提取mfcc和logmel的200ms窗的函数
@@ -13,7 +8,7 @@
 #include <Arduino.h>
 #include <esp_log.h>
 #include "esp_heap_caps.h"
-
+#include "system_state.h"
 
 
 static const char* MFCCTAG = "MFCC_MODULE";
@@ -139,6 +134,7 @@ static void push_bark_event(int16_t* samples, int16_t len, uint32_t timestamp_ms
 // -------------------- 主处理函数 --------------------
 void bark_detector_process_event(TinyMLEvent* event) {
 
+    if (!g_system_ready) return;
     if (!event || !g_bark_queue) return;
 
     int16_t* pcm = event->samples;
@@ -168,7 +164,7 @@ void bark_detector_process_event(TinyMLEvent* event) {
         // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 
         if (prob >= BARK_HIGH_THRESHOLD) {
-            Serial.printf("push窗狗吠概率为： %.3f\n", prob);
+            // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
             push_bark_event(g_window, BARK_WIN_LEN, ts);
         }
 
@@ -208,7 +204,7 @@ void bark_detector_process_event(TinyMLEvent* event) {
             // 判断这个窗的概率事件
             if (prob >= BARK_HIGH_THRESHOLD) {
                 // 高概率 → 直接输出
-                Serial.printf("push窗狗吠概率为： %.3f\n", prob);
+                // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
                 push_bark_event(g_window, BARK_WIN_LEN, ts);
                 g_mid_len = 0; // 清空中概率缓冲
             } 
@@ -227,7 +223,10 @@ void bark_detector_process_event(TinyMLEvent* event) {
 
                     // 只保留后一半继续累积
                     memmove(g_mid_buffer, g_mid_buffer + BARK_WIN_LEN, BARK_WIN_LEN * sizeof(int16_t));
+                    
                     g_mid_len = BARK_WIN_LEN;
+                    // 完全清空，不留后窗
+                    g_mid_len = 0;
                 }
             } 
             else {

@@ -7,6 +7,9 @@
 #include "audio_consumer.h" // VAD 消费端
 #include "bark_detector.h"  // 狗吠检测消费者
 #include "verify_embedding.h"  // 声纹验证消费者
+#include "led_control.h"
+#include "system_state.h"
+
 
 
 // ==================== audio_queue 队列 ====================
@@ -40,6 +43,7 @@ static TinyMLEvent evt;
 // bark_event接收结构体
 static BarkEvent bark_evt;
 
+volatile bool g_system_ready = false;
 
 
 // ==================== 音频生产者任务 ====================
@@ -166,6 +170,7 @@ void setup()
     Serial.printf("[MEM] PSRAM可用: %d KB\n", ESP.getFreePsram() / 1024);
     Serial.printf("[MEM] 内部RAM总堆: %d KB\n", ESP.getHeapSize() / 1024);
     Serial.printf("[MEM] 内部RAM可用: %d KB\n", ESP.getFreeHeap() / 1024);
+    
 
 
 
@@ -226,11 +231,14 @@ void setup()
     // 初始化验证模块
     verify_embedding_init();
 
+    led_init();
 
-
+    g_system_ready = true;
 
     // 等待所有异步操作完成
     delay(500);
+
+
 
 
     // ===== 启动任务 优先消费者，再生产者 =====
@@ -241,12 +249,12 @@ void setup()
 
     xTaskCreatePinnedToCore(AudioConsumerTask, "VADConsumer", 8192, (void*)audio_queue, 9, NULL, 1);
 
-    xTaskCreatePinnedToCore(AudioProducerTask, "AudioProducer", 8192, (void*)audio_queue, 10, NULL, 0);
+    xTaskCreatePinnedToCore(AudioProducerTask, "AudioProducer", 8192, (void*)audio_queue, 10, NULL, 1);
 
-
+    xTaskCreatePinnedToCore(LedTask, "LED", 2048, NULL, 6, NULL, 0);
 
     // 创建监控任务
-    xTaskCreatePinnedToCore(MonitorMemoryTask, "Monitor", 2048, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(MonitorMemoryTask, "Monitor", 2048, NULL, 5, NULL, 0);
 
     Serial.println("All tasks started");
 
@@ -258,3 +266,27 @@ void loop()
 {
     // FreeRTOS 已接管，不需要操作
 }
+
+
+
+
+
+
+
+// #include "Arduino.h"
+// #include "flash_storage.h"
+
+// void setup() {
+//     Serial.begin(115200);
+//     delay(100);                 // 给 USB CDC 一点时间
+//     Serial.println("booting...");
+
+//     reset_storage();
+//     Serial.println("flash erased");
+// }
+
+// void loop() {
+//     delay(1000);
+// }
+
+

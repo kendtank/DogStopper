@@ -39,6 +39,8 @@ extern "C" {
 
 
 #define EMBED_OUTPUT_SIZE 32      // 每个 embedding 长度
+#define BATCH_SLOTS 10   // = 10
+
 
 
 // 状态机结构体，这里做存储flash，读取flash到内存，修改在聚类端。

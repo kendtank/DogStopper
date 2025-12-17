@@ -58,25 +58,31 @@ void flash_storage_close() {
 /* ============ embedding 日志 ============ */
 bool flash_save_embedding(const float* embed)
 {
-    char key[16];
-    snprintf(key, sizeof(key), "e%u", flash_state.total_embed_counter);
+    uint32_t slot = flash_state.batch_embed_counter % BATCH_SLOTS;
 
-    if (!nvs.putBytes(key, embed,
+    char key[8];
+    snprintf(key, sizeof(key), "b%u", slot);
+
+    if (!nvs.putBytes(key,
+                      embed,
                       EMBED_OUTPUT_SIZE * sizeof(float))) {
         return false;
     }
     return true;
 }
 
-bool flash_read_embedding(uint32_t index, float* out_embed)
+bool flash_read_embedding(uint32_t batch_idx,
+                                float* out_embed)
 {
-    char key[16];
-    snprintf(key, sizeof(key), "e%u", index);
+    char key[8];
+    snprintf(key, sizeof(key), "b%u", batch_idx);
 
-    return nvs.getBytes(key, out_embed,
+    return nvs.getBytes(key,
+                        out_embed,
                         EMBED_OUTPUT_SIZE * sizeof(float))
            == EMBED_OUTPUT_SIZE * sizeof(float);
 }
+
 
 
 
