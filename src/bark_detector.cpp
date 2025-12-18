@@ -18,8 +18,8 @@ static const char* MFCCTAG = "MFCC_MODULE";
 static QueueHandle_t g_bark_queue = nullptr;   // 外部定义，内部只接受句柄，绑定
 
 // 滑窗缓存，长度 2*BARK_WIN_LEN
-static int16_t g_mid_buffer[2 * BARK_WIN_LEN];   // 滑窗缓存,  用于在两个mid概率窗找出中心窗push
-static size_t g_mid_len = 0;                    // 当前缓冲有效长度 
+// static int16_t g_mid_buffer[2 * BARK_WIN_LEN];   // 滑窗缓存,  用于在两个mid概率窗找出中心窗push
+// static size_t g_mid_len = 0;                    // 当前缓冲有效长度 
 // 存放mfcc推理的结果，用于推理
 static float test_output_mfcc[MFCC_SIZE];
 // 声明推送事件的结构体
@@ -29,6 +29,19 @@ static BarkEvent* discard_evt = NULL;    // 6.3kb
 
 // 全局 200ms 窗口缓冲，防止栈溢出（6.4KB）
 static int16_t g_window[BARK_WIN_LEN];
+
+
+// ================== Bark 候选窗结构体 ==================
+typedef struct {
+    int offset;     // 相对 pcm 的起始位置（sample index）
+    float prob;     // bark 概率
+} BarkCandidate;
+
+// ================== Bark Top-K 缓存（模块级） ==================
+static BarkCandidate g_bark_top_k[BARK_MAX_K];
+static int g_bark_top_k_size = 0;
+
+
 
 
 
@@ -58,9 +71,9 @@ bool bark_detector_init(QueueHandle_t bark_queue) {
     // 绑定队列句柄
     g_bark_queue = bark_queue;
     //  缓冲区长度初始化
-    g_mid_len = 0;
-    //  缓冲区清零
-    memset(g_mid_buffer, 0, sizeof(g_mid_buffer));
+    // g_mid_len = 0;
+    // //  缓冲区清零
+    // memset(g_mid_buffer, 0, sizeof(g_mid_buffer));
     memset(g_window, 0, sizeof(g_window));
     // 初始化特征提取函数
     if (!init_feature_buffers()){
@@ -131,6 +144,194 @@ static void push_bark_event(int16_t* samples, int16_t len, uint32_t timestamp_ms
 
 
 
+// // -------------------- 主处理函数 --------------------
+// void bark_detector_process_event(TinyMLEvent* event) {
+
+//     if (!g_system_ready) return;
+//     if (!event || !g_bark_queue) return;
+
+//     int16_t* pcm = event->samples;
+//     int total_len = event->samples_length;
+//     uint32_t ts = event->timestamp_ms;
+
+//     // ------- 1. 小于150ms：丢弃 -------
+//     if (total_len < BARK_LOW) { // <150ms @16kHz, 实际呢， VAD最短都是13 *  block  = 3328
+//         // 丢弃
+//         return;
+//     }
+
+
+//     // ------- 2. 150~200ms：平均填充到200ms -------
+//     else if (total_len < BARK_WIN_LEN)
+//     {
+//         int pad_len = BARK_WIN_LEN - total_len;
+//         int pad_left = pad_len / 2;
+//         int pad_right = pad_len - pad_left;
+
+//         memset(g_window, 0, pad_left * sizeof(int16_t));
+//         memcpy(g_window + pad_left, pcm, total_len * sizeof(int16_t));
+//         memset(g_window + pad_left + total_len, 0, pad_right * sizeof(int16_t));
+
+//         float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
+//         // 打印概率
+//         // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
+
+//         if (prob >= BARK_HIGH_THRESHOLD) {
+//             // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
+//             push_bark_event(g_window, BARK_WIN_LEN, ts);
+//         }
+
+//         return;
+//     }
+
+//     // ------- 3. 大于等于200ms：滑窗推理 -------
+//     else {
+//         int start = 0;   // 滑窗起始位置
+
+//         // ================== 优化12-17 新增：Top-K 候选窗缓存 ==================
+//         typedef struct {
+//             int offset;     // 相对 pcm 的起始位置
+//             float prob;     // bark 概率
+//         } BarkCandidate;
+
+//         static BarkCandidate top_k[BARK_MAX_K];
+
+//         int top_k_size = 0;
+
+//         // 显式清空 Top-K 缓存，防止 static 数据跨 event 残留
+//         memset(top_k, 0, sizeof(top_k));
+//         // ===========================================================
+
+
+//         while (start < total_len) {
+
+//             int remain = total_len - start;  // 剩余长度
+//             int win_len = fmin(remain, (int)BARK_WIN_LEN);
+
+//             // 清空全局缓冲
+//             memset(g_window, 0, BARK_WIN_LEN * sizeof(int16_t));
+
+//             // 尾部窗， 尾窗长度小于200ms， 前填充(和训练保持一致)
+//             if (win_len < BARK_WIN_LEN) {
+//                 // 尾窗前填充真实音频
+//                 int pad_len = BARK_WIN_LEN - win_len;  // 需要填充的长度
+//                 int copy_from = start - pad_len;     // 计算填充的起始位置
+//                 if (copy_from < 0) copy_from = 0; // 边界保护， 正常不可能发生
+//                 int pad_actual = start - copy_from; // 从填充位置开始，实际需要填充的长度
+//                 memcpy(g_window, pcm + copy_from, pad_actual * sizeof(int16_t));   // 前填充的真实音频
+//                 memcpy(g_window + pad_actual, pcm + start, win_len * sizeof(int16_t));  // 追加当前窗
+//             } 
+//             // 正常窗
+//             else {
+//                 memcpy(g_window, pcm + start, BARK_WIN_LEN * sizeof(int16_t));
+//             }
+
+//             // 推理
+//             float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
+//             // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
+
+//             // ================== 新增：候选窗筛选逻辑 ==================
+//             if (prob >= BARK_LOW_THRESHOLD) {
+
+//                 // 新增：防止 Top-K 收集到高度重叠的滑窗（200ms window + 100ms stride）
+//                 bool too_close = false;
+//                 for (int i = 0; i < top_k_size; i++) {
+//                     if (abs(start - top_k[i].offset) < (BARK_WIN_LEN / 2)) {
+//                         too_close = true;
+//                         break;
+//                     }
+//                 }
+//                 if (too_close) {
+//                     start += BARK_STRIDE;
+//                     continue;
+//                 }
+
+//                 // 查找插入位置（按 prob 从大到小）
+//                 int insert_pos = top_k_size;
+//                 for (int i = 0; i < top_k_size; i++) {
+//                     if (prob > top_k[i].prob) {
+//                         insert_pos = i;
+//                         break;
+//                     }
+//                 }
+
+//                 // 如果能进入 Top-K
+//                 if (insert_pos < BARK_MAX_K) {
+
+//                     // 后移，给新元素腾位置
+//                     for (int j = BARK_MAX_K - 1; j > insert_pos; j--) {
+//                         if (j < top_k_size) {
+//                             top_k[j] = top_k[j - 1];
+//                         }
+//                     }
+
+//                     top_k[insert_pos].offset = start;
+//                     top_k[insert_pos].prob   = prob;
+
+//                     if (top_k_size < BARK_MAX_K) {
+//                         top_k_size++;
+//                     }
+//                 }
+//             }
+//             // =========================================================
+
+//             // // 判断这个窗的概率事件
+//             // if (prob >= BARK_HIGH_THRESHOLD) {
+//             //     // 高概率 → 直接输出
+//             //     // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
+//             //     push_bark_event(g_window, BARK_WIN_LEN, ts);
+//             //     g_mid_len = 0; // 清空中概率缓冲
+//             // } 
+//             // // 中概率窗
+//             // else if (prob >= BARK_LOW_THRESHOLD) {
+//             //     // 中概率窗 → 累积到缓冲
+//             //     memcpy(g_mid_buffer + g_mid_len, g_window, BARK_WIN_LEN * sizeof(int16_t));
+//             //     g_mid_len += BARK_WIN_LEN;
+
+//             //     // 如果中概率缓冲 ≥ 2 窗 → 输出中心窗
+//             //     if (g_mid_len >= 2 * BARK_WIN_LEN) {
+//             //         // 暂时使用中心窗，// TODO:后续需要使用能量峰值检测
+//             //         size_t center_offset = (g_mid_len - BARK_WIN_LEN) / 2;
+
+//             //         push_bark_event(g_mid_buffer + center_offset, BARK_WIN_LEN, ts);
+
+//             //         // 只保留后一半继续累积
+//             //         memmove(g_mid_buffer, g_mid_buffer + BARK_WIN_LEN, BARK_WIN_LEN * sizeof(int16_t));
+                    
+//             //         g_mid_len = BARK_WIN_LEN;
+//             //         // 完全清空，不留后窗
+//             //         g_mid_len = 0;
+//             //     }
+//             // } 
+//             // else {
+//             //     // 低概率 → 丢弃事件 + 并清空缓冲
+//             //     g_mid_len = 0;
+//             // }
+//             start += BARK_STRIDE;
+//         }
+
+//         // ================== 新增：统一输出阶段 ==================
+//         for (int i = 0; i < top_k_size; i++) {
+
+//             // 只输出“足够可信”的窗
+//             if (top_k[i].prob < BARK_HIGH_THRESHOLD) {
+//                 continue;
+//             }
+
+//             // 重新构造 200ms 窗（避免直接引用 pcm）
+//             memset(g_window, 0, BARK_WIN_LEN * sizeof(int16_t));
+//             memcpy(g_window,
+//                    pcm + top_k[i].offset,
+//                    BARK_WIN_LEN * sizeof(int16_t));
+
+//             push_bark_event(g_window, BARK_WIN_LEN, ts);
+//         }
+//         // =========================================================
+//     }
+// }
+
+
+
 // -------------------- 主处理函数 --------------------
 void bark_detector_process_event(TinyMLEvent* event) {
 
@@ -142,15 +343,13 @@ void bark_detector_process_event(TinyMLEvent* event) {
     uint32_t ts = event->timestamp_ms;
 
     // ------- 1. 小于150ms：丢弃 -------
-    if (total_len < BARK_LOW) { // <150ms @16kHz, 实际呢， VAD最短都是13 *  block  = 3328
-        // 丢弃
+    if (total_len < BARK_LOW) {
         return;
     }
 
-
     // ------- 2. 150~200ms：平均填充到200ms -------
-    else if (total_len < BARK_WIN_LEN)
-    {
+    else if (total_len < BARK_WIN_LEN) {
+
         int pad_len = BARK_WIN_LEN - total_len;
         int pad_left = pad_len / 2;
         int pad_right = pad_len - pad_left;
@@ -160,81 +359,89 @@ void bark_detector_process_event(TinyMLEvent* event) {
         memset(g_window + pad_left + total_len, 0, pad_right * sizeof(int16_t));
 
         float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
-        // 打印概率
-        // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 
         if (prob >= BARK_HIGH_THRESHOLD) {
-            // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
             push_bark_event(g_window, BARK_WIN_LEN, ts);
         }
-
         return;
     }
 
     // ------- 3. 大于等于200ms：滑窗推理 -------
     else {
-        int start = 0;   // 滑窗起始位置
 
-        while (start < total_len) {
+        int start = 0;
 
-            int remain = total_len - start;  // 剩余长度
-            int win_len = fmin(remain, (int)BARK_WIN_LEN);
+        // ================== 初始化 Top-K ==================
+        g_bark_top_k_size = 0;
+        memset(g_bark_top_k, 0, sizeof(g_bark_top_k));
+        // ===================================================
 
-            // 清空全局缓冲
-            memset(g_window, 0, BARK_WIN_LEN * sizeof(int16_t));
+        while (start + BARK_WIN_LEN <= total_len) {
 
-            // 尾部窗， 尾窗长度小于200ms， 前填充(和训练保持一致)
-            if (win_len < BARK_WIN_LEN) {
-                // 尾窗前填充真实音频
-                int pad_len = BARK_WIN_LEN - win_len;  // 需要填充的长度
-                int copy_from = start - pad_len;     // 计算填充的起始位置
-                if (copy_from < 0) copy_from = 0; // 边界保护， 正常不可能发生
-                int pad_actual = start - copy_from; // 从填充位置开始，实际需要填充的长度
-                memcpy(g_window, pcm + copy_from, pad_actual * sizeof(int16_t));   // 前填充的真实音频
-                memcpy(g_window + pad_actual, pcm + start, win_len * sizeof(int16_t));  // 追加当前窗
-            } 
-            // 正常窗
-            else {
-                memcpy(g_window, pcm + start, BARK_WIN_LEN * sizeof(int16_t));
-            }
-            // 推理
+            // 构造 200ms 窗
+            memcpy(g_window, pcm + start, BARK_WIN_LEN * sizeof(int16_t));
+
             float prob = tinyml_bark_inference(g_window, BARK_WIN_LEN);
-            // Serial.printf("当前窗狗吠概率为： %.3f\n", prob);
 
-            // 判断这个窗的概率事件
-            if (prob >= BARK_HIGH_THRESHOLD) {
-                // 高概率 → 直接输出
-                // Serial.printf("push窗狗吠概率为： %.3f\n", prob);
-                push_bark_event(g_window, BARK_WIN_LEN, ts);
-                g_mid_len = 0; // 清空中概率缓冲
-            } 
-            // 中概率窗
-            else if (prob >= BARK_LOW_THRESHOLD) {
-                // 中概率窗 → 累积到缓冲
-                memcpy(g_mid_buffer + g_mid_len, g_window, BARK_WIN_LEN * sizeof(int16_t));
-                g_mid_len += BARK_WIN_LEN;
+            // ================== Top-K 筛选 ==================
+            if (prob >= BARK_LOW_THRESHOLD) {
 
-                // 如果中概率缓冲 ≥ 2 窗 → 输出中心窗
-                if (g_mid_len >= 2 * BARK_WIN_LEN) {
-                    // 暂时使用中心窗，// TODO:后续需要使用能量峰值检测
-                    size_t center_offset = (g_mid_len - BARK_WIN_LEN) / 2;
-
-                    push_bark_event(g_mid_buffer + center_offset, BARK_WIN_LEN, ts);
-
-                    // 只保留后一半继续累积
-                    memmove(g_mid_buffer, g_mid_buffer + BARK_WIN_LEN, BARK_WIN_LEN * sizeof(int16_t));
-                    
-                    g_mid_len = BARK_WIN_LEN;
-                    // 完全清空，不留后窗
-                    g_mid_len = 0;
+                // 防止高度重叠窗（stride=100ms，window=200ms）
+                bool too_close = false;
+                for (int i = 0; i < g_bark_top_k_size; i++) {
+                    if (abs(start - g_bark_top_k[i].offset) < (BARK_WIN_LEN / 2)) {
+                        too_close = true;
+                        break;
+                    }
                 }
-            } 
-            else {
-                // 低概率 → 丢弃事件 + 并清空缓冲
-                g_mid_len = 0;
+                if (too_close) {
+                    start += BARK_STRIDE;
+                    continue;
+                }
+
+                // 插入排序（prob 从大到小）
+                int insert_pos = g_bark_top_k_size;
+                for (int i = 0; i < g_bark_top_k_size; i++) {
+                    if (prob > g_bark_top_k[i].prob) {
+                        insert_pos = i;
+                        break;
+                    }
+                }
+
+                if (insert_pos < BARK_MAX_K) {
+
+                    for (int j = BARK_MAX_K - 1; j > insert_pos; j--) {
+                        if (j < g_bark_top_k_size) {
+                            g_bark_top_k[j] = g_bark_top_k[j - 1];
+                        }
+                    }
+
+                    g_bark_top_k[insert_pos].offset = start;
+                    g_bark_top_k[insert_pos].prob   = prob;
+
+                    if (g_bark_top_k_size < BARK_MAX_K) {
+                        g_bark_top_k_size++;
+                    }
+                }
             }
+            // =================================================
 
             start += BARK_STRIDE;
         }
+
+        // ================== 统一输出 ==================
+        for (int i = 0; i < g_bark_top_k_size; i++) {
+
+            // if (g_bark_top_k[i].prob < BARK_HIGH_THRESHOLD) {
+            //     continue;
+            // }
+
+            memcpy(g_window,
+                   pcm + g_bark_top_k[i].offset,
+                   BARK_WIN_LEN * sizeof(int16_t));
+
+            push_bark_event(g_window, BARK_WIN_LEN, ts);
+        }
+        // ================================================
     }
 }

@@ -58,6 +58,8 @@ extern "C" {
 #define BARK_LOW_THRESHOLD  0.65f    // 中概率阈值，用于聚合   大于 0.6 的窗加入缓冲区， 低于0.6直接丢弃
 #define GAIN_THRESHOLD      0.3f    // 增益补偿，前期模型训练的效果差， 需补偿，后续可以设置为0， 就是在推理出来的概率加这个值
 #define BARK_QUEUE_DEPTH    20      // bark 事件队列深度    BARK_QUEUE_DEPTH * BarkEvent  大小约 = 20 *  (3200 * 2B) = 128000B = 125KB
+#define BARK_MAX_K     2      // 一个vad事件最多输出 K 个窗（后续可以调整）
+
 
 
 // ==========================================
