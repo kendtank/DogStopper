@@ -14,6 +14,7 @@
 ├── .vscode/               # VSCode 的配置目录（自动生成）
 ├── include/               # 存放头文件（.h）
 ├── lib/                   # 存放项目依赖库
+├── python/                # 存放 Python 项目源码，用于控制算法的开发和模型的设计和训练，量化
 ├── src/                   # 存放主程序源码（.cpp/.c）
 │   └── main.cpp           # 主程序入口（等价于 Arduino 的 .ino 文件）
 ├── test/                  # 存放测试代码或单元测试
