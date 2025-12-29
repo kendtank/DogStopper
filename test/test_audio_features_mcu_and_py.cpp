@@ -58,7 +58,10 @@
 //     TEST_ASSERT_TRUE(is_init);
 
 //     // 直接使用python生成的数据头文件
+//     // 添加一个计时器
+//     u32_t start_time = micros();
 //     int result = compute_mfcc_200ms(aug_3, test_output_mfcc);
+//     Serial.printf("[MFCC精度测试] 耗时: %d ms\n", (micros() - start_time)/1000);
 //     TEST_ASSERT_EQUAL_INT(NUM_FRAMES, result);
 
 //     // 打印logmel特征的前10bin数据和后十个bin的数据
@@ -97,7 +100,9 @@
 //     TEST_ASSERT_TRUE(is_init);
 
 //     // 直接使用python生成的数据头文件
+//     u32_t start_time = micros();
 //     int result = compute_mfcc_200ms(aug_10, test_output_mfcc);
+//     Serial.printf("[MFCC精度测试] 耗时: %d ms\n", (micros() - start_time)/1000);
 //     TEST_ASSERT_EQUAL_INT(NUM_FRAMES, result);
 
 //     // 打印logmel特征的前10bin数据和后十个bin的数据
@@ -137,7 +142,9 @@
 //     TEST_ASSERT_TRUE(is_init);
 
 //     // 直接使用python生成的数据头文件
+//     u32_t start_time = micros();
 //     int result = compute_mfcc_200ms(aug_20, test_output_mfcc);
+//     Serial.printf("[MFCC精度测试] 耗时: %d ms\n", (micros() - start_time)/1000);
 //     TEST_ASSERT_EQUAL_INT(NUM_FRAMES, result);
 
 //     // 打印logmel特征的前10bin数据和后十个bin的数据
@@ -199,86 +206,37 @@
 
 
 // /*
-// [MEM] 堆内存剩余: 317.691406 KB
-// [MEM] PSRAM总大小: 8189.663086 KB
-// [MEM] PSRAM可用: 8137.815430 KB
-// [MEM] 堆内存剩: 317.433594 KB
-// [MEM] PSRAM总大小: 8189.663086 KB
-// [MEM] PSRAM可用: 8137.815430 KB
-// frames_win: 18 frames
-// fft_power_init: 始化完成, FFT大小 = 512
-// fft_power_compute: 功率谱计算完成
-// [MEM] 堆内存剩余: 310.449219 KB
-// [MEM] PSRAM总大小: 8189.663086 KB
-// [MEM] PSRAM可用: 8137.815430 KB
-// [TIME] compute_logmel_200ms 执行耗时: 58179 us (58.179 ms)
-// [MEM] 堆内存剩余: 310.449219 KB
-// [MEM] PSRAM总大小: 8189.663086 KB
-// [MEM] PSRAM用: 8137.815430 KB
-// [MEM] 堆内存剩余: 310.449219 KB
-// [MEM] PSRAM总大小: 8189.663086 KB
-// [MEM] PSRAM可用: 8137.815430 KB
-// [TIME] 单独计算mfcc时间开销 执行耗时: 10849 us (10.849 ms)
-// [TIME] 总计算mfcc时间开销 执行耗时: 100287 us (100.287 ms)
-// [精度测试] mcu-mfcc-前10bin数据:
-// -295.590973 105.727707 24.521528 -3.784542 9.139164 -21.907455 0.532185 -13.506745 0.757442 -4.937358 
-// [精度测试] python-mfcc bin前10个数据:
-// -295.588745 105.732544 24.513809 -3.780352 9.136531 -21.911320 0.537862 -13.513548 0.765523 -4.944677 [MFCC精度测试] 最大绝对误差=0.031578, 均方根误差=0.009195
-// test/test_audio_features_mcu_and_py.cpp:183:test_mfcc_accuracy_aug_3:PASS
-// [MEM] 堆内存剩余: 297.933594 KB
-// [MEM] PSRAM总大小: 8189.600586 KB
-// [MEM] PSRAM可用: 8086.143555 KB
-// [MEM] 堆内存剩: 297.933594 KB
-// [MEM] PSRAM总大小: 8189.600586 KB
-// [MEM] PSRAM可用: 8086.143555 KB
-// frames_win: 18 frames
-// fft_power_init: 初始化，无需重复
-// fft_power_compute: 功率谱计算完成
-// [MEM] 堆内存剩余: 297.933594 KB
-// [MEM] PSRAM总大小: 8189.600586 KB
-// [MEM] PSRAM可用: 8086.143555 KB
-// [TIME] compute_logmel_200ms 执行耗时: 66274 us (66.274 ms)
-// [MEM] 堆内存剩余: 297.933594 KB
-// [MEM] PSRAM总大小: 8189.600586 KB
-// [MEM] PSRAM用: 8086.143555 KB
-// [MEM] 堆内存剩余: 297.933594 KB
-// [MEM] PSRAM总大小: 8189.600586 KB
-// [MEM] PSRAM可用: 8086.143555 KB
-// [TIME] 单独计算mfcc时间开销 执行耗时: 10849 us (10.849 ms)
-// [TIME] 总计算mfcc时间开销 执行耗时: 108287 us (108.287 ms)
-// [精度测试] mcu-mfcc-前10bin数据:
-// -233.684830 63.682377 -43.375397 25.557131 -12.887185 -11.875598 -32.436863 5.031828 29.087748 39.692867 
-// [精度测试] python-mfcc bin前10个数据:
-// -233.679733 63.678844 -43.371521 25.554783 -12.883421 -11.883199 -32.434013 5.040243 29.093575 39.695473 [MFCC精度测试] 最大绝对误差=0.031784, 均方根误差=0.010109
-// test/test_audio_features_mcu_and_py.cpp:184:test_mfcc_accuracy_aug_10:PASS
-// [MEM] 堆内存剩余: 285.417969 KB
-// [MEM] PSRAM总大小: 8189.538086 KB
-// [MEM] PSRAM可用: 8034.471680 KB
-// [MEM] 堆内存剩: 285.417969 KB
-// [MEM] PSRAM总大小: 8189.538086 KB
-// [MEM] PSRAM可用: 8034.471680 KB
-// frames_win: 18 frames
-// fft_power_init: 初始化，无需重复
-// fft_power_compute: 功率谱计算完成
-// [MEM] 堆内存剩余: 285.417969 KB
-// [MEM] PSRAM总大小: 8189.538086 KB
-// [MEM] PSRAM可用: 8034.471680 KB
-// [TIME] compute_logmel_200ms 执行耗时: 66153 us (66.153 ms)
-// [MEM] 堆内存剩余: 285.417969 KB
-// [MEM] PSRAM总大小: 8189.538086 KB
-// [MEM] PSRAM用: 8034.471680 KB
-// [MEM] 堆内存剩余: 285.417969 KB
-// [MEM] PSRAM总大小: 8189.538086 KB
-// [MEM] PSRAM可用: 8034.471680 KB
-// [TIME] 单独计算mfcc时间开销 执行耗时: 10850 us (10.850 ms)
-// [TIME] 总计算mfcc时间开销 执行耗时: 108181 us (108.181 ms)
-// [精度测试] mcu-mfcc-前10bin数据:
-// -197.903061 81.145950 -17.537302 -2.247563 -17.779985 8.426172 -10.868982 -2.416545 -9.965975 -20.399273 
-// [精度测试] python-mfcc bin前10个数据:
-// -197.897583 81.149292 -17.542450 -2.255974 -17.775555 8.429510 -10.871561 -2.409623 -9.986266 -20.384758 [MFCC精度测试] 最大绝对误差=0.032432, 均方根误差=0.009623
-// test/test_audio_features_mcu_and_py.cpp:185:test_mfcc_accuracy_aug_20:PASS
+// Testing...
+// If you don't see any output for the first 10 secs, please reset board (press reset button)
+
+// TimeoutError: Could not automatically find serial port for the `Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)` board based on the declared HWIDs=['303A:1001']
+// ,boot:0x8 (SPI_FAST_FLASH_BOOT)
+// SPIWP:0xee
+// mode:DIO, clock div:1
+// load:0x3fce3808,len:0x4bc
+// load:0x403c9700,len:0xbd8
+// load:0x403cc700,len:0x2a0c
+// entry 0x403c98d0
+// E (191) esp_core_dump_flash: No core dump partition found!
+// E (191) esp_core_[MFCC] : 14 ms
+// [] mcu-mfcc-10bin:
+// -230.906738 84.329803 20.346903 -1.755843 8.647002 -16.128767 0.919875 -9.791492 1.856562 -3.267820 
+// [] python-mfcc bin10:
+// -230.901917 84.326942 20.345694 -1.756472 8.646265 -16.131538 0.924685 -9.796757 1.863426 -3.272874 [MFCC] =0.038795, =0.010895
+// test/test_audio_features_mcu_and_py.cpp:190:test_mfcc_accuracy_aug_3:PASS
+// [MFCC] : 12 ms
+// [] mcu-mfcc-10bin:
+// -175.993607 50.592129 -30.930349 20.422026 -8.830701 -6.271747 -25.413607 2.704144 21.443384 30.489834 
+// [] python-mfcc bin10:
+// -175.990265 50.587410 -30.927769 20.419739 -8.828226 -6.278226 -25.410358 2.712247 21.447262 30.492245 [MFCC] =0.042492, =0.013332
+// test/test_audio_features_mcu_and_py.cpp:191:test_mfcc_accuracy_aug_10:PASS
+// [MFCC] : 13 ms
+// [] mcu-mfcc-10bin:
+// -149.933609 64.756668 -12.778255 -1.470561 -13.787678 8.354923 -7.064749 -0.840027 -7.642793 -14.379223 
+// [] python-mfcc bin10:
+// -149.925491 64.750473 -12.779612 -1.470924 -13.787410 8.356293 -7.065049 -0.839793 -7.650611 -14.368452 [MFCC] =0.039062, =0.010461
+// test/test_audio_features_mcu_and_py.cpp:192:test_mfcc_accuracy_aug_20:PASS
 
 // -----------------------
 // 3 Tests 0 Failures 0 Ignored 
-// OK
 // */

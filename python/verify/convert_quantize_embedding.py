@@ -88,26 +88,79 @@ def representative_dataset_gen(calib_feats):
 # -----------------------------
 # 3. 执行 INT8 量化
 # -----------------------------
-def quantize_int8(keras_model_path: str, calib_feats, output_tflite="model_int8.tflite"):
-    model = tf.keras.models.load_model(keras_model_path)
+# def quantize_int8(keras_model_path: str, calib_feats, output_tflite="model_int8.tflite"):
+#     model = tf.keras.models.load_model(keras_model_path)
 
+#     converter = tf.lite.TFLiteConverter.from_keras_model(model)
+#     converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+#     # 使用校准集
+#     converter.representative_dataset = lambda: representative_dataset_gen(calib_feats)
+
+#     # 全 int8 推理
+#     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+#     converter.inference_input_type = tf.int8
+#     converter.inference_output_type = tf.int8
+
+#     tflite_model = converter.convert()
+
+#     with open(output_tflite, "wb") as f:
+#         f.write(tflite_model)
+
+#     print("Saved:", output_tflite)
+
+
+def quantize_int8(
+    keras_model_path: str,
+    calib_feats,
+    output_tflite: str = "model_int8.tflite",
+):
+    # 1. 加载模型（不编译，避免引入无关 state）
+    model = tf.keras.models.load_model(keras_model_path, compile=False)
+
+    # 2. 创建 TFLite Converter
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
+
+    # ====== 核心：MCU 必须的约束 ======
+
+    # 启用新 converter（图更干净）
+    converter.experimental_new_converter = True
+
+    # 禁止 resource variables（Stateful 图的来源）
+    converter.experimental_enable_resource_variables = False
+
+    # 禁止 custom ops（否则 MCU 会 fallback）
+    converter.allow_custom_ops = False
+
+    # 禁止 TensorList / 动态 list（SHAPE / PACK 常见来源）
+    converter._experimental_lower_tensor_list_ops = False
+
+    # ====== 标准 INT8 量化 ======
+
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
-    # 使用校准集
+    # 使用真实校准数据
     converter.representative_dataset = lambda: representative_dataset_gen(calib_feats)
 
-    # 全 int8 推理
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    # 强制全 INT8（MCU 必须）
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS_INT8
+    ]
+
     converter.inference_input_type = tf.int8
     converter.inference_output_type = tf.int8
 
+    converter.experimental_new_quantizer = True  # ← 这一行
+
+    # ====== 转换 ======
     tflite_model = converter.convert()
 
+    # ====== 保存 ======
     with open(output_tflite, "wb") as f:
         f.write(tflite_model)
 
-    print("Saved:", output_tflite)
+    print(f"[OK] INT8 TFLite saved to: {output_tflite}")
+
 
 
 
